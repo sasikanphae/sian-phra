@@ -1,0 +1,28 @@
+# เซียนพระ จำลอง (Sian Phra Simulator)
+
+เกมเว็บจำลองการเป็นเซียนพระ: รับเช่าพระจากลูกค้า ส่องพระ 3D หมุนได้ 360° แยกแท้/เก๊ ไต่เลเวล ประกวดพระ และจัดสร้างพระกับวัด
+เล่นได้ทั้งคอมและมือถือ (UI ภาษาไทย)
+
+## Tech
+- HTML/CSS/JS ล้วน ไม่มี build step — `index.html` + `game.js` (ES module) + `three.module.min.js` (three.js r170, local copy)
+- รันด้วย static server ใดก็ได้ เช่น `npx serve .` หรือ `python3 -m http.server 8000` (เปิดไฟล์ตรง ๆ ด้วย file:// ไม่ได้ เพราะ ES module)
+- เซฟเกมใน `localStorage` key `sianphra_v1` (ครอบ try/catch ไว้)
+
+## โครงสร้าง game.js (ตามหัวข้อคอมเมนต์ `/* ===== ... ===== */`)
+1. **utils** — `rng(seed)` (mulberry32), `hash`, `fmt` (฿), `wpick` (weighted pick)
+2. **game data** — `MATS` (เนื้อพระ), `TELLS` (จุดสังเกตแท้/เก๊), `MODELS` (พระแต่ละรุ่น + `spec` ขององค์ครู), `LEVELS`, `UNLOCK`, `TEMPLES`, `PIMS`, ชื่อ/บทพูดลูกค้า
+3. **procedural amulet 2D** — วาด heightmap ลง canvas (`drawFront`, `drawBack`, `drawFigure`) แล้ว `makeFace()` แปลงเป็น color / normal / displacement / alpha map พร้อมรอยสึก รูพรุน ลายงา ตามสภาพ (`cond`)
+4. **procedural amulet 3D** — `buildAmulet(model, spec, cond, seed, res)` = ExtrudeGeometry (ตัวองค์ + ขอบ cut/round + ความหนา) + plane หน้า/หลังที่ใช้ displacement + หูเหรียญ (เชื่อม/ตัน)
+5. **main view** — renderer หลัก, หมุนแบบ trackball (quaternion), pinch/wheel zoom, pan, พลิก, ส่อง (loupe)
+6. **thumbnails** — renderer ตัวที่สอง (preserveDrawingBuffer) ทำภาพ หน้า/หลัง/ข้าง สำหรับสมุดและตู้พระ แบบคิวทีละงาน
+7. **state** — `S` (เงิน, xp, ชื่อเสียง, วัน, inv, queue, batches, custom models), `makeCustomer`, `mutate` (สร้างของเก๊โดยเปลี่ยน tell 1–3 จุด)
+8. **rendering** — `render()` วาด HUD / การ์ดลูกค้า / ปุ่ม / แท็บ; โหมด `shop` (หน้าร้าน) กับ `own` (ส่ององค์ในตู้)
+9. **actions** — ต่อราคา, รับเช่า, ส่งตรวจ, ปล่อยเช่า, `endDay()` (ผลตรวจ, เฉลยองค์ที่ปฏิเสธ, ยอดบูชารุ่นที่จัดสร้าง, ค่าแผง)
+10. **modals** — สมุดองค์ครู, ตู้พระ, ประกวด (`runContest`), จัดสร้าง (`makeBatch`), เมนู, วิธีเล่น
+
+## หลักการสำคัญ
+- องค์ครูของแต่ละรุ่นต้องหน้าตาเหมือนกันทุกครั้ง: ลวดลายที่ "เป็นของรุ่น" ใช้ seed จาก `hash(model.id)` ส่วนรอยเฉพาะองค์ (ลายนิ้วมือ บิ่น) ใช้ seed ของแต่ละชิ้น
+- จุดสังเกตใหม่ต้องเพิ่มทั้งใน `TELLS` (label, ตัวเลือก, ข้อความ) และในโค้ดวาด/สร้าง 3D ให้ "มองเห็นได้จริง" บนองค์พระ
+- พระ วัด ราคา และจุดสังเกตทั้งหมดเป็นเรื่องสมมติ ห้ามใช้ชื่อพระเครื่อง/วัด/เกจิจริง
+- ข้อความในเกมเป็นภาษาไทย ฟอนต์ Kanit (หัวข้อ/ปุ่ม) + Sarabun (เนื้อหา) จาก Google Fonts
+- ต้องเล่นได้บนมือถือ: ปุ่มสูง ≥ 44px, ทดสอบที่ความกว้าง 360–430px, เลย์เอาต์จอกว้าง ≥ 900px แยกคอลัมน์ขวา
