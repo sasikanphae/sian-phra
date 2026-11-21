@@ -323,7 +323,9 @@ function buildAmulet(m, spec, cond, seed, res = 1) {
   const bg = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: bev.s, bevelThickness: bev.t, bevelSegments: bev.n, curveSegments: 24 });
   bg.translate(0, 0, -depth / 2);
   const bodyMat = new THREE.MeshStandardMaterial({ map: sideTex(m.mat), roughness: mat.rough, metalness: mat.metal });
-  grp.add(new THREE.Mesh(bg, bodyMat));
+  const body = new THREE.Mesh(bg, bodyMat); body.userData.part = 'body'; grp.add(body);
+  const topY = (.5 - .11) * 1.25, mid = outlinePts(m.shape).filter(([, y]) => Math.abs(y - .55) < .08);
+  grp.userData = { shape: m.shape, thick, D: coin ? .03 : .045, topY, edgeX: Math.max(...mid.map(([x]) => x)) - .5 + bev.s * .6, resin: spec.resin === 'yes' };
   const D = coin ? .03 : .045, seg = Math.round(190 * res);
   const tex = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
   for (const side of ['front', 'back']) {
@@ -332,17 +334,17 @@ function buildAmulet(m, spec, cond, seed, res = 1) {
     const pm = new THREE.Mesh(new THREE.PlaneGeometry(1, 1.25, seg, Math.round(seg * 1.25)), mm);
     pm.position.z = (side === 'front' ? 1 : -1) * (thick / 2 + .0008);
     if (side === 'back') pm.rotation.y = Math.PI;
-    grp.add(pm);
+    pm.userData.part = side; grp.add(pm);
   }
   if (coin) {
-    const topY = (.5 - .11) * 1.25, lm = new THREE.MeshStandardMaterial({ map: sideTex(m.mat), metalness: mat.metal, roughness: mat.rough + .08 });
+    const lm = new THREE.MeshStandardMaterial({ map: sideTex(m.mat), metalness: mat.metal, roughness: mat.rough + .08 });
     if (spec.loop === 'weld') {
-      const t = new THREE.Mesh(new THREE.TorusGeometry(.065, .016, 14, 40), lm); t.position.y = topY + .075; grp.add(t);
-      const w = new THREE.Mesh(new THREE.SphereGeometry(.03, 16, 12), lm); w.scale.set(1.4, .8, .9); w.position.y = topY + .006; grp.add(w);
+      const t = new THREE.Mesh(new THREE.TorusGeometry(.065, .016, 14, 40), lm); t.position.y = topY + .075; t.userData.part = 'loop'; grp.add(t);
+      const w = new THREE.Mesh(new THREE.SphereGeometry(.03, 16, 12), lm); w.scale.set(1.4, .8, .9); w.position.y = topY + .006; w.userData.part = 'loop'; grp.add(w);
     } else {
       const s = new THREE.Shape(); s.absarc(0, 0, .085, 0, Math.PI * 2); const hp = new THREE.Path(); hp.absarc(0, 0, .042, 0, Math.PI * 2, true); s.holes.push(hp);
       const lg = new THREE.ExtrudeGeometry(s, { depth: thick * .8, bevelEnabled: true, bevelSize: .004, bevelThickness: .004, bevelSegments: 1, curveSegments: 24 });
-      lg.translate(0, 0, -thick * .4); const lmsh = new THREE.Mesh(lg, lm); lmsh.position.y = topY + .055; grp.add(lmsh);
+      lg.translate(0, 0, -thick * .4); const lmsh = new THREE.Mesh(lg, lm); lmsh.position.y = topY + .055; lmsh.userData.part = 'loop'; grp.add(lmsh);
     }
   }
   return grp;
@@ -385,13 +387,19 @@ function rotBy(ax, ay) { qa.setFromAxisAngle(AY, ax); holder.quaternion.premulti
 function panBy(dx, dy) { const k = fitDist() * V.zoom * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * 2 / (stage.clientHeight || 1); V.px = clamp(V.px - dx * k, -.7, .7); V.py = clamp(V.py + dy * k, -.8, .8); }
 const ptrs = new Map(); let pinch0 = null;
 const pinchState = () => { const [a, b] = [...ptrs.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
-canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); V.drag = true; V.vx = V.vy = 0; V.reset = null; V.pan = e.button === 2 || e.shiftKey; if (ptrs.size === 2) pinch0 = pinchState(); });
+let tap0 = null;
+canvas.addEventListener('pointerdown', e => {
+  if (!ptrs.size) tap0 = { x: e.clientX, y: e.clientY, max: 0, multi: false }; else if (tap0) tap0.multi = true;
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); V.drag = true; V.vx = V.vy = 0; V.reset = null; V.pan = e.button === 2 || e.shiftKey; if (ptrs.size === 2) pinch0 = pinchState(); });
 canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  if (tap0) tap0.max = Math.max(tap0.max, Math.hypot(e.clientX - tap0.x, e.clientY - tap0.y));
   if (ptrs.size === 1) { if (V.pan) panBy(dx, dy); else { const k = .009 * Math.max(.45, V.zoom); rotBy(dx * k, dy * k); V.vx = dx * k; V.vy = dy * k; } }
   else if (ptrs.size === 2 && pinch0) { const s = pinchState(); V.zt = clamp(V.zt * pinch0.d / s.d, .2, 1.6); panBy(s.x - pinch0.x, s.y - pinch0.y); pinch0 = s; }
 });
-const ptrUp = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch0 = null; if (!ptrs.size) V.drag = false; };
+const ptrUp = e => {
+  if (e.type === 'pointerup' && tap0 && !tap0.multi && ptrs.size === 1 && ptrs.has(e.pointerId) && tap0.max < 6) onTap(e.clientX, e.clientY);
+  ptrs.delete(e.pointerId); if (!ptrs.size) tap0 = null; if (ptrs.size < 2) pinch0 = null; if (!ptrs.size) V.drag = false; };
 canvas.addEventListener('pointerup', ptrUp); canvas.addEventListener('pointercancel', ptrUp);
 canvas.addEventListener('wheel', e => { e.preventDefault(); V.zt = clamp(V.zt * Math.exp(e.deltaY * .0012), .2, 1.6); }, { passive: false });
 canvas.addEventListener('dblclick', () => resetView());
@@ -406,6 +414,65 @@ function showAmulet(m, spec, cond, seed) {
   holder.quaternion.identity(); rotBy(-.9, .12); V.vx = .03; V.vy = -.002; V.zt = 1; V.zoom = 1.25; V.px = V.py = 0; V.reset = null; V.spin = 0;
 }
 function clearAmulet() { if (cur) { holder.remove(cur); disposeGroup(cur); cur = null; } }
+const RC = new THREE.Raycaster(), NDC = new THREE.Vector2();
+function inPoly(x, y, P) { let o = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) o = !o; } return o; }
+// ยิง ray จากจุดที่แตะไปที่องค์พระ คืนส่วนที่โดน (front/back พร้อมพิกัด canvas, body, loop)
+function pickPart(cx, cy) {
+  if (!cur) return null;
+  const rc = canvas.getBoundingClientRect(); NDC.set((cx - rc.left) / rc.width * 2 - 1, -(cy - rc.top) / rc.height * 2 + 1);
+  holder.updateMatrixWorld(); RC.setFromCamera(NDC, cam);
+  for (const h of RC.intersectObjects(cur.children, true)) {
+    const part = h.object.userData.part; if (!part) continue;
+    if (part === 'front' || part === 'back') { if (!h.uv || !inPoly(h.uv.x, 1 - h.uv.y, outlinePts(cur.userData.shape))) continue; return { part, px: h.uv.x * TW, py: (1 - h.uv.y) * TH }; }
+    return { part };
+  }
+  return null;
+}
+// แปลงพิกัดบนหน้าพระ (canvas TW x TH) เป็นโซนของจุดสังเกต โดยเทียบกับ FIG ของพิมพ์
+function frontZone(shape, px, py) {
+  const { cx, by, s } = FIG[shape], dx = Math.abs(px - cx);
+  if (shape === 'pidta') return dx < s * .3 && py > by - s * 1.06 && py < by - s * .62 ? 'palm' : null;
+  if (shape === 'arch' && py < .88 * TH && inset(outlinePts('arch').slice(2), .85, .5, .56).some(([a, b]) => Math.hypot(a * TW - px, b * TH - py) < 26)) return 'dots';
+  if (dx < s * .11 && py < by - s * .74 && py > by - s * 1.12) return 'flame';
+  if (dx < s * .56 && py >= by - s * .04 && py < by + s * .32) return 'base';
+  if (dx < s * .36 && py > by - s * .52 && py < by - s * .04 && !(dx < s * .1 && py < by - s * .24)) return 'hand';
+  return null;
+}
+const ZONE_KEYS = { base: ['petals', 'tiers'], body: ['edge', 'thick'] };
+const shortLabel = k => TELLS[k].label.replace(/\s*\(.*\)/, '');
+// ตำแหน่ง (local) ของจุดสังเกตบนองค์พระ สำหรับไฮไลต์
+function keyPos(k) {
+  const u = cur.userData, f = FIG[u.shape], z = u.thick / 2 + u.D * .8;
+  const c2l = (px, py, sgn = 1) => [new THREE.Vector3(px / TW - .5, (.5 - py / TH) * 1.25, sgn * z), sgn < 0 ? Math.PI : 0];
+  switch (k) {
+    case 'flame': return c2l(f.cx, f.by - f.s * .9);
+    case 'hand': return c2l(f.cx - f.s * .24, f.by - f.s * .3);
+    case 'petals': case 'tiers': return c2l(f.cx, f.by + f.s * .1);
+    case 'dots': return c2l(TW / 2, TH * .13);
+    case 'palm': return c2l(f.cx, f.by - f.s * .85);
+    case 'back': return c2l(TW / 2, TH * .53, -1);
+    case 'edge': case 'thick': return [new THREE.Vector3(u.edgeX, 0, 0), Math.PI / 2];
+    case 'loop': return [new THREE.Vector3(0, u.topY + .075, 0), 0];
+    default: return c2l(TW / 2, TH * .55);
+  }
+}
+const HL = [];
+function highlight(k, ms = 1000) {
+  if (!cur) return;
+  const [pos, ry] = keyPos(k), big = ['back', 'grain', 'resin', 'weight'].includes(k), r0 = big ? .2 : .085;
+  const mk2 = (geo, op) => { const o = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: op, depthTest: false, toneMapped: false, side: THREE.DoubleSide })); o.renderOrder = 10; o.userData.op = op; return o; };
+  const mesh = new THREE.Group(); mesh.add(mk2(new THREE.RingGeometry(r0, r0 + .03, 48), 1), mk2(new THREE.CircleGeometry(r0, 48), .22));
+  mesh.position.copy(pos); mesh.rotation.y = ry; cur.add(mesh);
+  HL.push({ mesh, grp: cur, t0: performance.now(), ms });
+}
+function tickHL() {
+  const now = performance.now();
+  for (let i = HL.length - 1; i >= 0; i--) {
+    const h = HL[i], t = (now - h.t0) / h.ms;
+    if (t >= 1 || h.grp !== cur) { h.grp.remove(h.mesh); h.mesh.children.forEach(o => { o.geometry.dispose(); o.material.dispose(); }); HL.splice(i, 1); continue; }
+    h.mesh.scale.setScalar(1 + .15 * Math.sin(now / 90)); h.mesh.children.forEach(o => o.material.opacity = o.userData.op * (t < .75 ? 1 : (1 - t) * 4));
+  }
+}
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function frame() {
   requestAnimationFrame(frame);
@@ -416,7 +483,7 @@ function frame() {
   if (V.zt >= .99 && !V.drag) { V.px *= .88; V.py *= .88; }
   cam.position.set(V.px, V.py, fitDist() * V.zoom);
   $('#loupe').style.opacity = V.zoom < .5 ? 1 : 0;
-  R.render(scene, cam);
+  tickHL(); R.render(scene, cam);
 }
 
 /* ================= thumbnails (second renderer) ================= */
@@ -478,9 +545,10 @@ function sfx(name) { const a = audio(); if (!a || !SFX[name]) return; try { SFX[
 
 /* ================= state ================= */
 const KEY = 'sianphra_v1';
-function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0 } }; }
+function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 } }; }
 let S = null; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
 if (!S || S.v !== 1) { S = newGame(); }
+S.stats.spotted = S.stats.spotted || 0;
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
 const lvl = () => { let l = 1; LEVELS.forEach((L, i) => { if (S.xp >= L.xp) l = i + 1; }); return l; };
 const modelById = id => MODELS.find(m => m.id === id) || S.custom.find(m => m.id === id);
@@ -488,6 +556,8 @@ const allModels = () => MODELS.concat(S.custom.filter(c => c.ready));
 const cf = c => .35 + .65 * Math.pow(clamp((c - 60) / 40, 0, 1), 1.4);
 function gainXP(n) { S.xp += Math.max(0, Math.round(n)); }
 
+const specKeys = m => Object.keys(m.spec);
+const wrongKeys = (spec, m) => specKeys(m).filter(k => spec[k] !== m.spec[k]);
 function mutate(spec, n, r) {
   const s = { ...spec }, ks = Object.keys(s).map(k => [k, r()]).sort((a, b) => a[1] - b[1]).map(a => a[0]).slice(0, n);
   for (const k of ks) {
@@ -514,7 +584,7 @@ if (!S.queue.length && S.day === 1 && !S.inv.length) genQueue();
 /* ================= modes & rendering ================= */
 let mode = 'shop', ownItem = null, lastShown = null;
 const coarse = matchMedia('(pointer: coarse)').matches;
-$('#hint').textContent = coarse ? 'ลากนิ้วเพื่อหมุน • ถ่างสองนิ้วเพื่อซูม/เลื่อน' : 'ลากเพื่อหมุน • ล้อเมาส์ซูม • Shift+ลากเลื่อน • ดับเบิลคลิกรีเซ็ต';
+const HINT = coarse ? 'ลากนิ้วเพื่อหมุน • ถ่างสองนิ้วเพื่อซูม/เลื่อน' : 'ลากเพื่อหมุน • ล้อเมาส์ซูม • Shift+ลากเลื่อน • ดับเบิลคลิกรีเซ็ต';
 function loadStage() {
   let key = null, args = null;
   if (mode === 'own' && ownItem) { key = 'i' + ownItem.id; args = [modelById(ownItem.modelId), ownItem.spec, ownItem.cond, ownItem.seed]; }
@@ -529,7 +599,8 @@ function render() {
   $('#xpfill').style.width = (Ln ? clamp((S.xp - Lc.xp) / (Ln.xp - Lc.xp), 0, 1) * 100 : 100) + '%';
   $('#rep').innerHTML = `${S.rep}<small>ชื่อเสียง</small>`;
   $('#day').innerHTML = `${S.day}<small>วันที่</small>`;
-  renderCard(); renderActs(); renderTabs(); loadStage();
+  renderCard(); renderActs(); renderTabs(); loadStage(); renderSpotBar();
+  $('#hint').textContent = spotting() ? 'แตะ = ชี้จุดที่ผิด • ลาก = หมุน' : HINT;
   const q = $('#qinfo'); q.innerHTML = '';
   if (mode === 'shop' && S.queue.length) q.innerHTML = `<span class="badge">ลูกค้ารอ ${S.queue.length} คน</span>` + (L >= 3 && S.day % 3 === 0 && S.contestDay !== S.day ? `<span class="badge gold">วันนี้มีงานประกวดพระ</span>` : '');
   let em = stage.querySelector('.empty'); if (em) em.remove();
@@ -560,20 +631,23 @@ function renderCard() {
     <div class="pname">${esc(m.name)}</div>
     <div class="facts">${specFacts(m)}<span>สภาพ <b>${c.cond}/100</b></span><span>ราคาตลาดถ้าแท้ <b>${fmt(m.price * cf(c.cond))}</b></span><span>ขอให้เช่า <b>${fmt(c.ask)}</b></span></div>`;
 }
+// แถวบน = เครื่องมือส่อง, แถวล่าง = การตัดสินใจ (ไม่เกิน 4 ปุ่มต่อแถว อ่านง่ายบนจอ 360px)
+function toolBtns() { return `<button class="btn" data-a="book">สมุด</button><button class="btn" data-a="flip">พลิก</button><button class="btn" data-a="loupe">ส่อง</button>`; }
 function renderActs() {
-  const el = $('#act');
-  const common = `<button class="btn" data-a="book">สมุด</button><button class="btn" data-a="flip">พลิก</button><button class="btn" data-a="loupe">ส่อง</button>`;
+  const el = $('#act'), rows = (a, b) => `<div class="ar">${a}</div>` + (b ? `<div class="ar">${b}</div>` : '');
   if (mode === 'own' && ownItem) {
     const it = ownItem, fee = certFee(it);
     let row2 = `<button class="btn dim" data-a="back">กลับหน้าร้าน</button>`;
     if (it.cert === false) row2 += `<button class="btn no span2" data-a="scrap">ทิ้ง / ขายเป็นของที่ระลึก<small>${fmt(scrapVal(it))}</small></button>`;
     else if (it.pend) row2 += `<button class="btn span2" disabled>รอผลตรวจถึงพรุ่งนี้</button>`;
     else row2 += (it.cert ? '' : `<button class="btn" data-a="cert">ส่งตรวจ<small>${fmt(fee)}</small></button>`) + `<button class="btn ok ${it.cert ? 'span2' : ''}" data-a="sell">ปล่อยเช่า<small>${fmt(offerFor(it))}</small></button>`;
-    el.innerHTML = common + row2;
+    el.innerHTML = rows(toolBtns(), row2);
+  } else if (spotting()) {
+    el.innerHTML = rows(toolBtns());
   } else if (S.queue[0]) {
     const c = S.queue[0];
-    el.innerHTML = common + `<button class="btn" data-a="nego">ต่อราคา</button><button class="btn ok" data-a="buy">รับเช่า<small>${fmt(c.ask)}</small></button><button class="btn no" data-a="pass">ไม่เอา</button>`;
-  } else el.innerHTML = `<button class="btn" data-a="book">สมุด</button><button class="btn" data-a="inv">ตู้พระ</button><button class="btn ok" data-a="end">ปิดร้าน</button>`;
+    el.innerHTML = rows(toolBtns(), `<button class="btn" data-a="nego">ต่อราคา</button><button class="btn ok" data-a="buy">รับเช่า<small>${fmt(c.ask)}</small></button><button class="btn no" data-a="pass">ไม่เอา</button>`);
+  } else el.innerHTML = rows(`<button class="btn" data-a="book">สมุด</button><button class="btn" data-a="inv">ตู้พระ</button><button class="btn ok" data-a="end">ปิดร้าน</button>`);
 }
 function renderTabs() {
   const L = lvl();
@@ -582,7 +656,7 @@ function renderTabs() {
 }
 
 /* ================= actions ================= */
-function toast(msg, kind = '') { const t = document.createElement('div'); t.className = 'toast ' + kind; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => t.remove(), 3600); }
+function toast(msg, kind = '') { if ([...$('#toasts').children].some(t => t.textContent === msg)) return; const t = document.createElement('div'); t.className = 'toast ' + kind; t.textContent = msg; $('#toasts').appendChild(t); setTimeout(() => t.remove(), 3600); }
 function nextCustomer() { S.queue.shift(); render(); }
 function negotiate() {
   const c = S.queue[0];
@@ -599,7 +673,47 @@ function buy() {
   S.inv.unshift({ id: c.id, modelId: c.modelId, spec: c.spec, genuine: c.genuine, cond: c.cond, seed: c.seed, paid: c.ask, cert: null, pend: 0, award: 0, day: S.day, xp: false });
   sfx('buy'); toast(`รับเช่าแล้ว เก็บเข้าตู้พระ`, 'good'); nextCustomer();
 }
-function pass() { const c = S.queue[0]; S.rejected.push({ modelId: c.modelId, genuine: c.genuine }); nextCustomer(); }
+/* ชี้จุดเก๊: กด "ไม่เอา" แล้วให้ผู้เล่นแตะจุดที่คิดว่าผิดก่อนไปลูกค้าคนถัดไป (ชี้ได้ครั้งเดียวต่อองค์) */
+let spot = null;
+const spotting = () => !!(spot && mode === 'shop' && S.queue[0] && S.queue[0].id === spot.cid);
+function pass() {
+  const c = S.queue[0]; if (!c || spot?.busy) return;
+  if (c.pointed) { finishPass(c); return; }
+  spot = { cid: c.id, busy: false }; render();
+}
+function finishPass(c) {
+  spot = null; if (S.queue[0] !== c) { render(); return; }
+  S.rejected.push({ modelId: c.modelId, genuine: c.genuine, pointed: c.pointed || null, hit: !!c.hit, wrong: c.genuine ? [] : wrongKeys(c.spec, modelById(c.modelId)) });
+  nextCustomer();
+}
+function onTap(x, y) {
+  if (!spotting() || spot.busy) return;
+  const hit = pickPart(x, y), m = modelById(S.queue[0].modelId);
+  if (!hit) { toast('แตะให้โดนองค์พระ หรือกด "เลือกจากรายการ"'); return; }
+  const zone = hit.part === 'front' ? frontZone(m.shape, hit.px, hit.py) : hit.part;
+  const keys = (ZONE_KEYS[zone] || [zone]).filter(k => k && k in m.spec);
+  if (!keys.length) { toast('ตรงนี้ไม่ใช่จุดสังเกต ลองแตะจุดอื่น'); return; }
+  commitSpot(keys);
+}
+function commitSpot(keys) {
+  const c = S.queue[0]; if (!spotting() || spot.busy || c.pointed) return;
+  const hitK = c.genuine ? null : keys.find(k => wrongKeys(c.spec, modelById(c.modelId)).includes(k));
+  c.pointed = keys;
+  if (hitK) {
+    c.hit = true; S.stats.spotted++; gainXP(20); save(); spot.busy = true; renderActs(); renderSpotBar();
+    toast(`เซียนตาถึง! (${shortLabel(hitK)}) +20 XP`, 'good'); highlight(hitK, 1000);
+    setTimeout(() => finishPass(c), 1050);
+  } else { save(); toast(`จดไว้แล้วว่าคุณชี้ "${keys.map(shortLabel).join(' / ')}" รอเฉลยตอนสรุปวัน`); finishPass(c); }
+}
+function spotListHTML() {
+  const m = modelById(S.queue[0].modelId);
+  return `<h2>จุดไหนที่ผิด?</h2><p class="note">เลือกได้ครั้งเดียว เทียบกับองค์ครูใน "สมุด" ให้แน่ใจก่อน</p><div class="pickl">${specKeys(m).map(k => `<button class="btn" data-spotk="${k}">${esc(TELLS[k].label)}</button>`).join('')}</div>
+    <div class="row"><button class="btn dim" data-close>กลับไปส่องต่อ</button></div>`;
+}
+function renderSpotBar() {
+  const el = $('#spotbar'), on = spotting(); el.hidden = !on; $('#qinfo').hidden = on;
+  if (on) el.innerHTML = spot.busy ? `<p>เซียนตาถึง!</p>` : `<p>แตะจุดที่คิดว่าผิดบนองค์พระ</p><div class="sb"><button class="btn dim" id="spotSkip">ข้าม</button><button class="btn" id="spotList">เลือกจากรายการ</button></div>`;
+}
 const certFee = it => round100(Math.max(500, modelById(it.modelId).price * .03));
 const scrapVal = it => round100(modelById(it.modelId).price * .02);
 function offerFor(it) { const m = modelById(it.modelId), r = rng(hash(it.id + ':' + S.day)); return round100(m.price * cf(it.cond) * (it.cert ? 1.15 : 1) * (1 + .1 * it.award) * (1 + S.rep / 300) * (.9 + r() * .18)); }
@@ -626,6 +740,11 @@ function endDay() {
   if (S.rejected.length) {
     const fakes = S.rejected.filter(x => !x.genuine).length, real = S.rejected.length - fakes; gainXP(fakes * 12);
     lines.push([fakes >= real ? 'good' : '', `องค์ที่คุณไม่รับเช่า ${S.rejected.length} องค์: เป็นของเก๊ ${fakes} องค์ (+${fakes * 12} XP)${real ? ` • เป็นของแท้ที่พลาดไป ${real} องค์` : ''}`]);
+    const hits = S.rejected.filter(x => x.hit).length; if (hits) lines.push(['good', `ชี้จุดเก๊ถูก ${hits} องค์`]);
+    for (const x of S.rejected) {
+      if (!x.pointed || x.hit) continue; const nm = modelById(x.modelId).name, pt = x.pointed.map(shortLabel).join(' / ');
+      lines.push(['bad', x.genuine ? `${nm}: คุณชี้ว่า "${pt}" ผิด แต่องค์นี้เป็นของแท้` : `${nm}: คุณชี้ "${pt}" แต่จุดที่ผิดจริงคือ ${(x.wrong || []).map(k => `"${shortLabel(k)}"`).join(', ')}`]);
+    }
   }
   S.rejected = [];
   for (const b of S.batches) {
@@ -747,13 +866,14 @@ function makeBatch() {
   openModal(templeHTML()); render();
 }
 function menuHTML() {
-  return `<h2>เมนู</h2><h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • XP ${S.xp}</p>
+  return `<h2>เมนู</h2><h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
   <div class="row"><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
 }
 const HOW = `<h2>ยินดีต้อนรับสู่แผงพระของคุณ</h2>
 <ul class="log"><li>ลูกค้าจะนำพระมาเสนอให้เช่า ลากเพื่อหมุนองค์พระได้รอบ 360° ดูทั้งด้านหน้า ด้านหลัง และขอบข้าง</li>
 <li>เปิด <b>สมุด</b> เทียบกับองค์ครู: ปางพระหัตถ์ พระเกศ จำนวนกลีบบัว ฐานชั้น ด้านหลัง ความหนา และผิวเนื้อ ของเก๊จะผิดอย่างน้อย 1 จุด</li>
 <li>กด <b>ส่อง</b> เพื่อซูมดูผิวใกล้ ๆ เหมือนใช้กล้องส่องพระ (ซูมแล้วลากสองนิ้ว หรือ Shift+ลาก เพื่อเลื่อนดู)</li>
+<li>ถ้ากด <b>ไม่เอา</b> ให้แตะจุดที่คิดว่าผิดบนองค์พระ (หรือเลือกจากรายการ) ถ้าองค์นั้นเก๊และชี้ถูก ได้ +20 XP ทันที</li>
 <li><b>ต่อราคา</b> ได้ แต่ถ้าต่อมากไปลูกค้าจะเดินหนี รับเช่าแล้วไปที่ <b>ตู้พระ</b> เพื่อส่งตรวจหรือปล่อยเช่าทำกำไร</li>
 <li>สะสม XP ไต่ระดับ: Lv.3 ปลดล็อกงานประกวดพระ, Lv.5 ปลดล็อกการจัดสร้างพระกับวัด</li></ul>
 <p class="note">พระ วัด ราคา และจุดสังเกตทั้งหมดในเกมเป็นเรื่องสมมติ ไม่ได้อ้างอิงพระเครื่องจริง</p>
@@ -771,18 +891,23 @@ $('#tabs').addEventListener('click', e => {
 });
 $('#mbody').addEventListener('click', e => {
   const own = e.target.closest('[data-own]'); if (own) { const it = S.inv.find(i => String(i.id) === own.dataset.own); if (it) openOwn(it); return; }
+  const sk = e.target.closest('[data-spotk]'); if (sk) { closeModal(); commitSpot([sk.dataset.spotk]); return; }
   if (e.target.id === 'enterC') runContest([...$('#mbody').querySelectorAll('.pick input:checked')].map(i => i.value));
   if (e.target.id === 'makeB') makeBatch();
   if (e.target.id === 'howBtn') openModal(HOW);
   if (e.target.id === 'soundBtn') { S.mute = !S.mute; save(); openModal(menuHTML()); sfx('buy'); }
   if (e.target.id === 'resetBtn') openModal(`<h2>เริ่มเกมใหม่?</h2><p>เงิน เลเวล และพระในตู้ทั้งหมดจะหายไป</p><div class="row"><button class="btn dim" data-close>ยกเลิก</button><button class="btn no" id="resetYes">ยืนยัน เริ่มใหม่</button></div>`);
-  if (e.target.id === 'resetYes') { const mute = S.mute; S = newGame(); S.mute = mute; genQueue(); mode = 'shop'; ownItem = null; lastShown = null; closeModal(); render(); }
+  if (e.target.id === 'resetYes') { const mute = S.mute; S = newGame(); S.mute = mute; genQueue(); mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
 });
 $('#mbody').addEventListener('change', e => {
   const k = e.target.dataset.tf; if (k) { TF[k] = k === 'qty' ? +e.target.value : e.target.value; openModal(templeHTML()); }
   if (e.target.matches('.pick input')) { const on = $('#mbody').querySelectorAll('.pick input:checked'); if (on.length > 3) { e.target.checked = false; toast('ส่งได้สูงสุด 3 องค์', 'bad'); } }
 });
 $('#menuBtn').onclick = () => openModal(menuHTML());
+$('#spotbar').addEventListener('click', e => {
+  if (e.target.id === 'spotSkip' && spotting() && !spot.busy) finishPass(S.queue[0]);
+  if (e.target.id === 'spotList' && spotting() && !spot.busy) openModal(spotListHTML());
+});
 
 resize(); render(); frame();
 if (!S.seen) { S.seen = true; save(); openModal(HOW); }
