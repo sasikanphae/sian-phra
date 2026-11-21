@@ -32,23 +32,26 @@ const TELLS = {
   thick:  { label: 'ความหนา (ดูด้านข้าง)', opts: ['thin', 'mid', 'thick'], txt: { thin: 'บาง', mid: 'หนาปานกลาง', thick: 'หนามาก' } },
   grain:  { label: 'ผิวเนื้อ (ใช้กล้องส่อง)', opts: ['pores', 'crackle', 'smooth', 'oxide'], txt: { pores: 'มีรูพรุนเม็ดทรายเล็ก ๆ ทั่วองค์', crackle: 'มีรอยแตกลายงาทั่วผิว', smooth: 'ผิวเรียบตึง ไม่มีร่องรอยธรรมชาติ', oxide: 'มีคราบไขขาวเป็นดวง ๆ เกาะตามผิว' } },
   palm:   { label: 'ยันต์ที่ฝ่ามือ (ใช้กล้องส่อง)', opts: ['una', 'na', 'plain'], txt: { una: 'ยันต์อุณาโลมนูนบนฝ่ามือทั้งสองข้าง', na: 'ยันต์ตัวขอมขีดเดียวบนฝ่ามือ', plain: 'ฝ่ามือเรียบ ไม่มียันต์' } },
+  // จุดสังเกตแฝง: ไม่อยู่ใน spec ขององค์ครู (ใช้ค่า def) ของเก๊ทั่วไปไม่เปลี่ยน มีแต่ "เก๊เทพ" ที่ผิดตรงนี้
+  resin:  { label: 'เรืองแสงใต้ไฟ UV', hidden: true, def: 'no', opts: ['no', 'yes'], txt: { no: 'ไม่เรืองแสง (ของแท้ไม่เรืองแสงใต้ UV)', yes: 'เรืองแสงสีฟ้าอมเขียว: เนื้อเรซิ่นปลอม' } },
+  weight: { label: 'น้ำหนัก (ใช้ตาชั่ง)', hidden: true, def: 'std', opts: ['std', 'light', 'heavy'], txt: { std: 'ตรงกับองค์ครู (คลาดเคลื่อนไม่เกิน ±3%)', light: 'เบากว่าองค์ครู 12–25%', heavy: 'หนักกว่าองค์ครู 12–25%' } },
   loop:   { label: 'หูเหรียญ', opts: ['weld', 'cast'], txt: { weld: 'หูเชื่อม: ห่วงกลมแยกชิ้น', cast: 'หูตัน: แผ่นแบนหล่อติดเหรียญ' } },
 };
 const tellTxt = (k, v) => { const t = TELLS[k].txt; return typeof t === 'function' ? t(v) : t[v]; };
 const MODELS = [
-  { id: 'nangpaya', name: 'พระนางพญา วัดเขาแก้ว', shape: 'tri', mat: 'clay', lvl: 1, price: 9000,
+  { id: 'nangpaya', name: 'พระนางพญา วัดเขาแก้ว', shape: 'tri', mat: 'clay', lvl: 1, price: 9000, weight: 14.5,
     spec: { hand: 'mara', flame: 'short', back: 'plain', edge: 'cut', thick: 'thick', grain: 'pores' } },
-  { id: 'somdej', name: 'พระสมเด็จ วัดศรีมงคล', shape: 'rect', mat: 'powder', lvl: 1, price: 28000,
+  { id: 'somdej', name: 'พระสมเด็จ วัดศรีมงคล', shape: 'rect', mat: 'powder', lvl: 1, price: 28000, weight: 9.5,
     spec: { hand: 'samadhi', tiers: 3, flame: 'short', back: 'plain', edge: 'cut', thick: 'mid', grain: 'crackle' } },
-  { id: 'coin1', name: 'เหรียญรุ่นแรก วัดหนองบัว', shape: 'oval', mat: 'copper', lvl: 2, price: 55000,
+  { id: 'coin1', name: 'เหรียญรุ่นแรก วัดหนองบัว', shape: 'oval', mat: 'copper', lvl: 2, price: 55000, weight: 12,
     spec: { hand: 'mara', petals: 5, flame: 'tall', back: 'yantra', loop: 'weld' } },
-  { id: 'sum', name: 'พระซุ้มเรือนแก้ว วัดทุ่งทอง', shape: 'arch', mat: 'clay', lvl: 3, price: 160000,
+  { id: 'sum', name: 'พระซุ้มเรือนแก้ว วัดทุ่งทอง', shape: 'arch', mat: 'clay', lvl: 3, price: 160000, weight: 17,
     spec: { hand: 'mara', petals: 7, dots: 13, flame: 'tall', back: 'plain', edge: 'cut', thick: 'thick', grain: 'pores' } },
-  { id: 'pidta', name: 'พระปิดตา วัดบ้านนา', shape: 'pidta', mat: 'lead', lvl: 4, price: 320000,
+  { id: 'pidta', name: 'พระปิดตา วัดบ้านนา', shape: 'pidta', mat: 'lead', lvl: 4, price: 320000, weight: 38,
     spec: { palm: 'una', back: 'yantra', edge: 'round', thick: 'thick', grain: 'oxide' } },
-  { id: 'somdejG', name: 'พระสมเด็จพิมพ์ใหญ่ กรุเก่า วัดศรีมงคล', shape: 'rect', mat: 'powder', gold: true, lvl: 4, price: 680000,
+  { id: 'somdejG', name: 'พระสมเด็จพิมพ์ใหญ่ กรุเก่า วัดศรีมงคล', shape: 'rect', mat: 'powder', gold: true, lvl: 4, price: 680000, weight: 10.5,
     spec: { hand: 'samadhi', tiers: 3, flame: 'tall', back: 'circle', edge: 'cut', thick: 'mid', grain: 'crackle' } },
-  { id: 'coin2', name: 'เหรียญเงินรุ่นพิเศษ วัดหนองบัว', shape: 'oval', mat: 'silver', lvl: 5, price: 1800000,
+  { id: 'coin2', name: 'เหรียญเงินรุ่นพิเศษ วัดหนองบัว', shape: 'oval', mat: 'silver', lvl: 5, price: 1800000, weight: 15.5,
     spec: { hand: 'samadhi', petals: 9, flame: 'short', back: 'square', loop: 'weld' } },
 ];
 const LEVELS = [
@@ -62,6 +65,13 @@ const TEMPLES = [
   { id: 'kk', name: 'วัดเขาแก้ว', fame: 2.3, rep: 60 },
 ];
 const PIMS = { rect: 'พิมพ์สมเด็จ', tri: 'พิมพ์นางพญา', arch: 'พิมพ์ซุ้มเรือนแก้ว', oval: 'เหรียญ' };
+const DW = { clay: 14, powder: 10, copper: 12, silver: 15, lead: 38 };
+const mWeight = m => m.weight || DW[m.mat];
+const TOOLS = [
+  { id: 'loupe', name: 'กล้องส่อง 20x', price: 15000, lvl: 1, desc: 'ซูมได้ลึกขึ้นอีกเท่าตัว และปุ่ม "ส่อง" ซูมใกล้ขึ้น เห็นรูพรุน ลายงา และยันต์ชัดกว่าเดิม' },
+  { id: 'uv', name: 'ไฟฉาย UV', price: 40000, lvl: 2, desc: 'เพิ่มปุ่ม "UV" ส่องในที่มืดใต้แสงม่วง เนื้อเรซิ่นปลอมจะเรืองแสงสีฟ้าอมเขียว ของแท้ไม่เรืองแสง' },
+  { id: 'scale', name: 'ตาชั่งดิจิทัล', price: 80000, lvl: 3, desc: 'แสดงน้ำหนักองค์พระเป็นกรัมในการ์ด เทียบกับน้ำหนักองค์ครูในสมุด ของแท้คลาดเคลื่อนไม่เกิน ±3%' },
+];
 const UNIT = { clay: 40, powder: 60, copper: 120, silver: 600 };
 const NAMES = ['ลุงสมชาย', 'ป้าบุญมี', 'เฮียเส็ง', 'เจ๊หมวย', 'พี่โอ๊ค', 'น้องต้น', 'ตาเปลี่ยน', 'คุณนิด', 'พี่บอย', 'ยายจันทร์', 'เสี่ยเปา', 'ลุงแดง', 'พี่หนิง', 'น้าเขียว', 'คุณวิชัย', 'อาจารย์ประยูร'];
 const HONEST = ['ของตกทอดจากคุณพ่อ เก็บในตู้มาหลายสิบปีแล้วครับ', 'ได้รับแจกตอนบวชเมื่อนานมาแล้ว ไม่เคยเอาไปส่องที่ไหนเลย', 'คุณยายห้อยคอมาทั้งชีวิต ลูกหลานอยากให้คนที่รู้คุณค่าดูแลต่อ', 'ไม่แน่ใจว่าแท้ไหม อยากให้เซียนช่วยดู ถ้าราคาพอดีก็ให้เช่าเลย', 'เพื่อนบ้านเก่ามอบให้ก่อนย้ายไปต่างจังหวัด'];
@@ -367,6 +377,7 @@ function setupScene(renderer) {
   const key = new THREE.DirectionalLight(0xfff0d8, 2.6); key.position.set(-2, 2.4, 3); sc.add(key);
   const fill = new THREE.DirectionalLight(0xffc49a, .55); fill.position.set(2.5, -.5, 2); sc.add(fill);
   const rim = new THREE.DirectionalLight(0xffffff, 1.1); rim.position.set(0, 1, -3); sc.add(rim);
+  sc.userData.lights = [sc.children[0], key, fill, rim].map(l => ({ l, c: l.color.clone(), i: l.intensity }));
   return sc;
 }
 function makeRenderer(opts) {
@@ -395,22 +406,36 @@ canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
   if (tap0) tap0.max = Math.max(tap0.max, Math.hypot(e.clientX - tap0.x, e.clientY - tap0.y));
   if (ptrs.size === 1) { if (V.pan) panBy(dx, dy); else { const k = .009 * Math.max(.45, V.zoom); rotBy(dx * k, dy * k); V.vx = dx * k; V.vy = dy * k; } }
-  else if (ptrs.size === 2 && pinch0) { const s = pinchState(); V.zt = clamp(V.zt * pinch0.d / s.d, .2, 1.6); panBy(s.x - pinch0.x, s.y - pinch0.y); pinch0 = s; }
+  else if (ptrs.size === 2 && pinch0) { const s = pinchState(); V.zt = clamp(V.zt * pinch0.d / s.d, zMin(), 1.6); panBy(s.x - pinch0.x, s.y - pinch0.y); pinch0 = s; }
 });
 const ptrUp = e => {
   if (e.type === 'pointerup' && tap0 && !tap0.multi && ptrs.size === 1 && ptrs.has(e.pointerId) && tap0.max < 6) onTap(e.clientX, e.clientY);
   ptrs.delete(e.pointerId); if (!ptrs.size) tap0 = null; if (ptrs.size < 2) pinch0 = null; if (!ptrs.size) V.drag = false; };
 canvas.addEventListener('pointerup', ptrUp); canvas.addEventListener('pointercancel', ptrUp);
-canvas.addEventListener('wheel', e => { e.preventDefault(); V.zt = clamp(V.zt * Math.exp(e.deltaY * .0012), .2, 1.6); }, { passive: false });
+canvas.addEventListener('wheel', e => { e.preventDefault(); V.zt = clamp(V.zt * Math.exp(e.deltaY * .0012), zMin(), 1.6); }, { passive: false });
 canvas.addEventListener('dblclick', () => resetView());
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 function resetView() { V.reset = new THREE.Quaternion(); V.zt = 1; V.vx = V.vy = 0; }
 function flip() { sfx('flip'); V.spin = Math.PI; V.vx = V.vy = 0; V.reset = null; }
-function toggleLoupe() { V.zt = V.zt > .6 ? .32 : 1; if (V.zt === 1) { V.px = V.py = 0; } }
+const zMin = () => S.tools.loupe ? .1 : .2;
+function toggleLoupe() { V.zt = V.zt > .6 ? (S.tools.loupe ? .16 : .32) : 1; if (V.zt === 1) { V.px = V.py = 0; } }
 let cur = null;
+// ไฟ UV: ฉากมืด ไฟม่วง; เนื้อเรซิ่น (spec.resin === 'yes') เรืองแสงฟ้าอมเขียวผ่าน emissive
+function applyUV() {
+  const on = !!(V.uv && S.tools.uv);
+  for (const { l, c, i } of scene.userData.lights) { if (on) l.color.set(0x7b3cff); else l.color.copy(c); l.intensity = on ? i * .35 : i; }
+  scene.environmentIntensity = on ? .05 : .55; stage.classList.toggle('uv', on);
+  if (cur) cur.traverse(o => {
+    if (!o.isMesh || !o.userData.part) return;
+    const glow = on && cur.userData.resin, mt = o.material, em = glow ? mt.map : null;
+    mt.emissive.set(glow ? 0x3dffd2 : 0x000000); mt.emissiveIntensity = glow ? 1.1 : 1;
+    if (mt.emissiveMap !== em) { mt.emissiveMap = em; mt.needsUpdate = true; }
+  });
+}
+function toggleUV() { V.uv = !V.uv; applyUV(); renderActs(); }
 function showAmulet(m, spec, cond, seed) {
   clearAmulet();
-  cur = buildAmulet(m, spec, cond, seed, 1); holder.add(cur);
+  cur = buildAmulet(m, spec, cond, seed, 1); holder.add(cur); applyUV();
   holder.quaternion.identity(); rotBy(-.9, .12); V.vx = .03; V.vy = -.002; V.zt = 1; V.zoom = 1.25; V.px = V.py = 0; V.reset = null; V.spin = 0;
 }
 function clearAmulet() { if (cur) { holder.remove(cur); disposeGroup(cur); cur = null; } }
@@ -545,10 +570,10 @@ function sfx(name) { const a = audio(); if (!a || !SFX[name]) return; try { SFX[
 
 /* ================= state ================= */
 const KEY = 'sianphra_v1';
-function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 } }; }
+function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 }, tools: {} }; }
 let S = null; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
 if (!S || S.v !== 1) { S = newGame(); }
-S.stats.spotted = S.stats.spotted || 0;
+S.stats.spotted = S.stats.spotted || 0; S.tools = S.tools || {};
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
 const lvl = () => { let l = 1; LEVELS.forEach((L, i) => { if (S.xp >= L.xp) l = i + 1; }); return l; };
 const modelById = id => MODELS.find(m => m.id === id) || S.custom.find(m => m.id === id);
@@ -556,8 +581,16 @@ const allModels = () => MODELS.concat(S.custom.filter(c => c.ready));
 const cf = c => .35 + .65 * Math.pow(clamp((c - 60) / 40, 0, 1), 1.4);
 function gainXP(n) { S.xp += Math.max(0, Math.round(n)); }
 
-const specKeys = m => Object.keys(m.spec);
-const wrongKeys = (spec, m) => specKeys(m).filter(k => spec[k] !== m.spec[k]);
+const HIDDEN = Object.keys(TELLS).filter(k => TELLS[k].hidden);
+const specKeys = m => Object.keys(m.spec).concat(HIDDEN);
+const sv = (spec, k) => spec[k] ?? TELLS[k].def;
+const wrongKeys = (spec, m) => specKeys(m).filter(k => sv(spec, k) !== sv(m.spec, k));
+// น้ำหนักต่อองค์ (กรัม): คำนวณจาก seed ขององค์ จึงไม่ต้องเซฟเพิ่ม
+function gramsOf(o) {
+  const m = modelById(o.modelId), r = rng((o.seed >>> 0) + 4242), w = sv(o.spec, 'weight');
+  const f = w === 'light' ? 1 - (.12 + r() * .13) : w === 'heavy' ? 1 + (.12 + r() * .13) : 1 + (r() * 2 - 1) * .03;
+  return Math.round(mWeight(m) * f * 10) / 10;
+}
 function mutate(spec, n, r) {
   const s = { ...spec }, ks = Object.keys(s).map(k => [k, r()]).sort((a, b) => a[1] - b[1]).map(a => a[0]).slice(0, n);
   for (const k of ks) {
@@ -572,7 +605,9 @@ function makeCustomer(r, L) {
   const m = wpick(r, pool.map(p => [p, p.lvl === L ? 3 : p.lvl === L - 1 ? 2 : 1]));
   const genuine = r() < .5;
   const n = wpick(r, L <= 2 ? [[3, .6], [2, .4]] : L <= 4 ? [[3, .25], [2, .45], [1, .3]] : [[2, .45], [1, .55]]);
-  const spec = genuine ? { ...m.spec } : mutate(m.spec, Math.min(n, Object.keys(m.spec).length), r);
+  // เก๊เทพ (Lv.3+): หน้าตาเหมือนองค์ครูทุกจุด ผิดแค่เนื้อเรซิ่นหรือน้ำหนัก
+  const god = !genuine && L >= 3 && r() < (L >= 5 ? .3 : .15);
+  const spec = genuine ? { ...m.spec } : god ? { ...m.spec, ...(r() < .5 ? { resin: 'yes' } : { weight: r() < .5 ? 'light' : 'heavy' }) } : mutate(m.spec, Math.min(n, Object.keys(m.spec).length), r);
   const cond = Math.round(genuine ? 62 + r() * 38 : 72 + r() * 28);
   const market = m.price * cf(cond), ask = round100(market * (genuine ? .55 + r() * .6 : .45 + r() * .5));
   const honest = genuine ? r() < .65 : r() < .35;
@@ -612,7 +647,7 @@ function render() {
   if (lvl() > S.lvlSeen && $('#modal').hidden) { const html = levelHTML(); if (html) openModal(html); }
   save();
 }
-function specFacts(m) { return `<span>${esc(MATS[m.mat].name)}</span>`; }
+function specFacts(m, o) { return `<span>${esc(MATS[m.mat].name)}</span>` + (S.tools.scale && o ? `<span>ตาชั่ง <b>${gramsOf(o).toFixed(1)} ก.</b></span>` : ''); }
 function renderCard() {
   const el = $('#card');
   if (mode === 'own' && ownItem) {
@@ -620,7 +655,7 @@ function renderCard() {
     const st = it.pend ? '<span class="badge">รอผลตรวจ</span>' : it.cert === true ? '<span class="badge good">ใบรับรองแท้</span>' : it.cert === false ? '<span class="badge bad">ของเก๊</span>' : '<span class="badge">ยังไม่ได้ตรวจ</span>';
     el.innerHTML = `<div class="ava">ตู้</div><div><div class="who">องค์ในตู้ของคุณ ${st} ${it.award ? `<span class="badge gold">ติดรางวัล</span>` : ''}</div><div class="line">รับเช่ามาเมื่อวันที่ ${it.day}</div></div>
       <div class="pname">${esc(m.name)}</div>
-      <div class="facts">${specFacts(m)}<span>สภาพ <b>${it.cond}/100</b></span><span>ทุน <b>${fmt(it.paid)}</b></span>${it.cert !== false && !it.pend ? `<span>มีคนให้เช่า <b>${fmt(offerFor(it))}</b></span>` : ''}</div>`;
+      <div class="facts">${specFacts(m, it)}<span>สภาพ <b>${it.cond}/100</b></span><span>ทุน <b>${fmt(it.paid)}</b></span>${it.cert !== false && !it.pend ? `<span>มีคนให้เช่า <b>${fmt(offerFor(it))}</b></span>` : ''}</div>`;
     return;
   }
   const c = S.queue[0];
@@ -629,10 +664,10 @@ function renderCard() {
   el.innerHTML = `<div class="ava">${esc(c.name.replace(/^(ลุง|ป้า|เฮีย|เจ๊|พี่|น้อง|ตา|คุณ|ยาย|เสี่ย|น้า|อาจารย์)/, '').slice(0, 1))}</div>
     <div><div class="who">${esc(c.name)} <span class="badge" title="ความอดทนในการต่อราคา">อดทน ${'●'.repeat(c.patience)}${'○'.repeat(Math.max(0, 3 - c.patience))}</span></div><div class="line">“${esc(c.line)}”</div></div>
     <div class="pname">${esc(m.name)}</div>
-    <div class="facts">${specFacts(m)}<span>สภาพ <b>${c.cond}/100</b></span><span>ราคาตลาดถ้าแท้ <b>${fmt(m.price * cf(c.cond))}</b></span><span>ขอให้เช่า <b>${fmt(c.ask)}</b></span></div>`;
+    <div class="facts">${specFacts(m, c)}<span>สภาพ <b>${c.cond}/100</b></span><span>ราคาตลาดถ้าแท้ <b>${fmt(m.price * cf(c.cond))}</b></span><span>ขอให้เช่า <b>${fmt(c.ask)}</b></span></div>`;
 }
 // แถวบน = เครื่องมือส่อง, แถวล่าง = การตัดสินใจ (ไม่เกิน 4 ปุ่มต่อแถว อ่านง่ายบนจอ 360px)
-function toolBtns() { return `<button class="btn" data-a="book">สมุด</button><button class="btn" data-a="flip">พลิก</button><button class="btn" data-a="loupe">ส่อง</button>`; }
+function toolBtns() { return `<button class="btn" data-a="book">สมุด</button><button class="btn" data-a="flip">พลิก</button><button class="btn" data-a="loupe">ส่อง</button>` + (S.tools.uv ? `<button class="btn uvb ${V.uv ? 'on' : ''}" data-a="uv" aria-pressed="${!!V.uv}">UV</button>` : ''); }
 function renderActs() {
   const el = $('#act'), rows = (a, b) => `<div class="ar">${a}</div>` + (b ? `<div class="ar">${b}</div>` : '');
   if (mode === 'own' && ownItem) {
@@ -786,13 +821,15 @@ addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden
 function bookHTML() {
   const L = lvl(), curId = mode === 'own' && ownItem ? ownItem.modelId : S.queue[0]?.modelId;
   const list = MODELS.concat(S.custom).slice().sort((a, b) => (b.id === curId) - (a.id === curId));
-  return `<h2>สมุดองค์ครู</h2><p class="note">เทียบองค์ที่กำลังส่องกับองค์ครู (ของแท้) ของเก๊จะผิดจากองค์ครูอย่างน้อย 1 จุด หมุนดูทั้งหน้า หลัง และขอบข้าง แล้วใช้ "ส่อง" ดูผิวเนื้อใกล้ ๆ</p>` +
+  return `<h2>สมุดองค์ครู</h2><div class="row" style="margin:0 0 8px"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button></div><p class="note">เทียบองค์ที่กำลังส่องกับองค์ครู (ของแท้) ของเก๊จะผิดจากองค์ครูอย่างน้อย 1 จุด หมุนดูทั้งหน้า หลัง และขอบข้าง แล้วใช้ "ส่อง" ดูผิวเนื้อใกล้ ๆ</p>` +
     list.map(m => {
       if (m.lvl > L && !m.custom) return `<div class="mdl"><b>${esc(m.name)}</b> <span class="badge">ปลดล็อก Lv.${m.lvl}</span></div>`;
       return `<div class="mdl ${m.id === curId ? 'cur' : ''}"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font:600 18px Kanit,sans-serif">${esc(m.name)}</b>${m.id === curId ? '<span class="badge gold">กำลังส่ององค์นี้</span>' : ''}</div>
       <div class="note">${esc(MATS[m.mat].name)} • ราคาตลาดสภาพสมบูรณ์ ${fmt(m.price)}</div>
       <div class="views" data-thumb="m:${m.id}"><figure><img alt="ด้านหน้า"><figcaption>ด้านหน้า</figcaption></figure><figure><img alt="ด้านหลัง"><figcaption>ด้านหลัง</figcaption></figure><figure><img alt="ด้านข้าง"><figcaption>ด้านข้าง</figcaption></figure></div>
-      <table class="tells">${Object.entries(m.spec).map(([k, v]) => `<tr><td>${TELLS[k].label}</td><td>${esc(tellTxt(k, v))}</td></tr>`).join('')}</table></div>`;
+      <table class="tells">${Object.entries(m.spec).map(([k, v]) => `<tr><td>${TELLS[k].label}</td><td>${esc(tellTxt(k, v))}</td></tr>`).join('')}
+      <tr><td>${TELLS.weight.label}</td><td>น้ำหนักองค์ครู <b>${mWeight(m)} กรัม</b> (ของแท้คลาดเคลื่อนไม่เกิน ±3%)</td></tr>
+      <tr><td>${TELLS.resin.label}</td><td>ของแท้ไม่เรืองแสงใต้ UV</td></tr></table></div>`;
     }).join('');
 }
 function invHTML() {
@@ -865,9 +902,21 @@ function makeBatch() {
   gainXP(50); toast('สั่งจัดสร้างแล้ว วัดจะทำพิธีและแจ้งเมื่อพร้อมให้บูชา', 'good');
   openModal(templeHTML()); render();
 }
+function toolShopHTML() {
+  const L = lvl();
+  return `<h2>ร้านอุปกรณ์เซียน</h2><p class="note">ตั้งแต่ Lv.3 จะเริ่มเจอ "เก๊เทพ" ที่หน้าตาเหมือนองค์ครูทุกจุด ต้องใช้ไฟ UV หรือตาชั่งถึงจะจับได้</p>` +
+    TOOLS.map(t => { const own = S.tools[t.id], lock = L < t.lvl;
+      return `<div class="mdl"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><b style="font:600 18px Kanit,sans-serif">${esc(t.name)}</b><span class="big" style="font-size:20px">${fmt(t.price)}</span></div>
+      <p>${esc(t.desc)}</p>${own ? '<span class="badge good">มีแล้ว</span>' : lock ? `<span class="badge">ปลดล็อก Lv.${t.lvl}</span>` : `<div class="row" style="margin-top:6px"><button class="btn ok" data-buytool="${t.id}" ${S.money < t.price ? 'disabled' : ''}>ซื้อ${S.money < t.price ? ' (เงินไม่พอ)' : ''}</button></div>`}</div>`; }).join('');
+}
+function buyTool(id) {
+  const t = TOOLS.find(x => x.id === id); if (!t || S.tools[id] || lvl() < t.lvl) return;
+  if (S.money < t.price) { toast('เงินไม่พอ', 'bad'); return; }
+  S.money -= t.price; S.tools[id] = true; sfx('buy'); toast(`ได้ ${t.name} มาแล้ว`, 'good'); openModal(toolShopHTML()); render();
+}
 function menuHTML() {
   return `<h2>เมนู</h2><h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
-  <div class="row"><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
+  <div class="row"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
 }
 const HOW = `<h2>ยินดีต้อนรับสู่แผงพระของคุณ</h2>
 <ul class="log"><li>ลูกค้าจะนำพระมาเสนอให้เช่า ลากเพื่อหมุนองค์พระได้รอบ 360° ดูทั้งด้านหน้า ด้านหลัง และขอบข้าง</li>
@@ -875,6 +924,7 @@ const HOW = `<h2>ยินดีต้อนรับสู่แผงพระ
 <li>กด <b>ส่อง</b> เพื่อซูมดูผิวใกล้ ๆ เหมือนใช้กล้องส่องพระ (ซูมแล้วลากสองนิ้ว หรือ Shift+ลาก เพื่อเลื่อนดู)</li>
 <li>ถ้ากด <b>ไม่เอา</b> ให้แตะจุดที่คิดว่าผิดบนองค์พระ (หรือเลือกจากรายการ) ถ้าองค์นั้นเก๊และชี้ถูก ได้ +20 XP ทันที</li>
 <li><b>ต่อราคา</b> ได้ แต่ถ้าต่อมากไปลูกค้าจะเดินหนี รับเช่าแล้วไปที่ <b>ตู้พระ</b> เพื่อส่งตรวจหรือปล่อยเช่าทำกำไร</li>
+<li>ซื้อ <b>กล้องส่อง 20x</b>, <b>ไฟฉาย UV</b> และ <b>ตาชั่ง</b> ได้ที่ร้านอุปกรณ์เซียน (ในเมนู ≡ หรือสมุด) ไว้จับ "เก๊เทพ" ที่โผล่มาตั้งแต่ Lv.3</li>
 <li>สะสม XP ไต่ระดับ: Lv.3 ปลดล็อกงานประกวดพระ, Lv.5 ปลดล็อกการจัดสร้างพระกับวัด</li></ul>
 <p class="note">พระ วัด ราคา และจุดสังเกตทั้งหมดในเกมเป็นเรื่องสมมติ ไม่ได้อ้างอิงพระเครื่องจริง</p>
 <div class="row"><button class="btn ok" data-close>เริ่มเปิดร้าน</button></div>`;
@@ -882,7 +932,7 @@ const HOW = `<h2>ยินดีต้อนรับสู่แผงพระ
 /* ================= event wiring ================= */
 $('#act').addEventListener('click', e => {
   const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
-  ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
+  ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, uv: toggleUV, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
      back: toShop, cert: () => certify(ownItem), sell: () => sell(ownItem), scrap: () => scrap(ownItem) })[a]?.();
 });
 $('#tabs').addEventListener('click', e => {
@@ -892,6 +942,8 @@ $('#tabs').addEventListener('click', e => {
 $('#mbody').addEventListener('click', e => {
   const own = e.target.closest('[data-own]'); if (own) { const it = S.inv.find(i => String(i.id) === own.dataset.own); if (it) openOwn(it); return; }
   const sk = e.target.closest('[data-spotk]'); if (sk) { closeModal(); commitSpot([sk.dataset.spotk]); return; }
+  const bt = e.target.closest('[data-buytool]'); if (bt) { buyTool(bt.dataset.buytool); return; }
+  if (e.target.id === 'toolShopBtn') { openModal(toolShopHTML()); return; }
   if (e.target.id === 'enterC') runContest([...$('#mbody').querySelectorAll('.pick input:checked')].map(i => i.value));
   if (e.target.id === 'makeB') makeBatch();
   if (e.target.id === 'howBtn') openModal(HOW);
