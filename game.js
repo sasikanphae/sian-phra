@@ -570,10 +570,11 @@ function sfx(name) { const a = audio(); if (!a || !SFX[name]) return; try { SFX[
 
 /* ================= state ================= */
 const KEY = 'sianphra_v1';
-function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 }, tools: {} }; }
+function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 }, tools: {}, loan: { amt: 0, day: 0 }, shareBan: 0 }; }
 let S = null; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
 if (!S || S.v !== 1) { S = newGame(); }
 S.stats.spotted = S.stats.spotted || 0; S.tools = S.tools || {};
+S.loan = S.loan || { amt: 0, day: 0 }; S.shareBan = S.shareBan || 0;
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
 const lvl = () => { let l = 1; LEVELS.forEach((L, i) => { if (S.xp >= L.xp) l = i + 1; }); return l; };
 const modelById = id => MODELS.find(m => m.id === id) || S.custom.find(m => m.id === id);
@@ -601,8 +602,12 @@ function mutate(spec, n, r) {
   return s;
 }
 function makeCustomer(r, L) {
-  const pool = allModels().filter(m => m.lvl <= L);
-  const m = wpick(r, pool.map(p => [p, p.lvl === L ? 3 : p.lvl === L - 1 ? 2 : 1]));
+  const pool = allModels().filter(m => m.lvl <= L), byLvl = ps => wpick(r, ps.map(p => [p, p.lvl === L ? 3 : p.lvl === L - 1 ? 2 : 1]));
+  // 75% เลือกจากรุ่นที่ราคาตลาดไม่เกิน 1.2 เท่าของเงินที่มี (ไม่มีเลย = รุ่นถูกสุด), 25% สุ่มตามเลเวล
+  // ใช้เลือกรุ่นอย่างเดียว ราคาที่ขอ (ask) ยังคิดจากราคาตลาดและสภาพเท่านั้น
+  let m;
+  if (r() < .75) { const ok = pool.filter(p => p.price <= S.money * 1.2); m = ok.length ? byLvl(ok) : pool.reduce((a, b) => b.price < a.price ? b : a); }
+  else m = byLvl(pool);
   const genuine = r() < .5;
   const n = wpick(r, L <= 2 ? [[3, .6], [2, .4]] : L <= 4 ? [[3, .25], [2, .45], [1, .3]] : [[2, .45], [1, .55]]);
   // เก๊เทพ (Lv.3+): หน้าตาเหมือนองค์ครูทุกจุด ผิดแค่เนื้อเรซิ่นหรือน้ำหนัก
@@ -630,7 +635,7 @@ function loadStage() {
 }
 function render() {
   const L = lvl(), Lc = LEVELS[L - 1], Ln = LEVELS[L];
-  $('#money').textContent = fmt(S.money);
+  $('#money').innerHTML = fmt(S.money) + (S.loan.amt ? `<small class="debt">หนี้ ${fmt(S.loan.amt)}</small>` : '');
   $('#lvname').textContent = `Lv.${L} ${Lc.name}`;
   $('#xpfill').style.width = (Ln ? clamp((S.xp - Lc.xp) / (Ln.xp - Lc.xp), 0, 1) * 100 : 100) + '%';
   $('#rep').innerHTML = `${S.rep}<small>ชื่อเสียง</small>`;
@@ -667,9 +672,10 @@ function renderCard() {
   if (mode === 'own' && ownItem) {
     const it = ownItem, m = modelById(it.modelId);
     const st = it.pend ? '<span class="badge">รอผลตรวจ</span>' : it.cert === true ? '<span class="badge good">ใบรับรองแท้</span>' : it.cert === false ? '<span class="badge bad">ของเก๊</span>' : '<span class="badge">ยังไม่ได้ตรวจ</span>';
-    el.innerHTML = `<div class="ava">ตู้</div><div><div class="who">องค์ในตู้ของคุณ ${st} ${it.award ? `<span class="badge gold">ติดรางวัล</span>` : ''}</div><div class="line">รับเช่ามาเมื่อวันที่ ${it.day}</div></div>
+    const line = it.consign ? `ฝากขายโดย${esc(it.consign.owner)} • ขายได้จ่ายเจ้าของ ${fmt(it.consign.price)} • เหลือ ${it.consign.until - S.day} วัน` : it.share ? `ลงหุ้น 50% กับเซียนเพื่อน • ขายได้แบ่งคนละครึ่ง` : `รับเช่ามาเมื่อวันที่ ${it.day}`;
+    el.innerHTML = `<div class="ava">ตู้</div><div><div class="who">${it.consign ? 'ของฝากขาย' : 'องค์ในตู้ของคุณ'} ${st} ${tagsOf(it)}${it.award ? ` <span class="badge gold">ติดรางวัล</span>` : ''}</div><div class="line">${line}</div></div>
       <div class="pname">${esc(m.name)}</div>
-      <div class="facts">${specFacts(m, it)}<span>สภาพ <b>${it.cond}/100</b></span><span>ทุน <b>${fmt(it.paid)}</b></span>${it.cert !== false && !it.pend ? `<span>มีคนให้เช่า <b>${fmt(offerFor(it))}</b></span>` : ''}</div>`;
+      <div class="facts">${specFacts(m, it)}<span>สภาพ <b>${it.cond}/100</b></span>${it.consign ? '' : `<span>ทุน${it.share ? 'ส่วนของคุณ' : ''} <b>${fmt(it.paid)}</b></span>`}${it.cert !== false && !it.pend ? `<span>มีคนให้เช่า <b>${fmt(offerFor(it))}</b></span>` : ''}</div>`;
     return;
   }
   const c = S.queue[0];
@@ -681,15 +687,16 @@ function renderCard() {
     <div class="facts">${specFacts(m, c)}<span>สภาพ <b>${c.cond}/100</b></span><span>ราคาตลาดถ้าแท้ <b>${fmt(m.price * cf(c.cond))}</b></span><span>ขอให้เช่า <b>${fmt(c.ask)}</b></span></div>`;
 }
 // แถวบน = เครื่องมือส่อง, แถวล่าง = การตัดสินใจ (ไม่เกิน 4 ปุ่มต่อแถว อ่านง่ายบนจอ 360px)
+const tagsOf = it => (it.consign ? `<span class="badge cons">ฝากขาย • เหลือ ${it.consign.until - S.day} วัน</span>` : '') + (it.share ? '<span class="badge shr">หุ้น 50%</span>' : '');
 function toolBtns() { return `<button class="btn" data-a="book">สมุด</button><button class="btn" data-a="flip">พลิก</button><button class="btn" data-a="loupe">ส่อง</button>` + (S.tools.uv ? `<button class="btn uvb ${V.uv ? 'on' : ''}" data-a="uv" aria-pressed="${!!V.uv}">UV</button>` : ''); }
 function renderActs() {
   const el = $('#act'), rows = (a, b) => `<div class="ar">${a}</div>` + (b ? `<div class="ar">${b}</div>` : '');
   if (mode === 'own' && ownItem) {
     const it = ownItem, fee = certFee(it);
     let row2 = `<button class="btn dim" data-a="back">กลับหน้าร้าน</button>`;
-    if (it.cert === false) row2 += `<button class="btn no span2" data-a="scrap">ทิ้ง / ขายเป็นของที่ระลึก<small>${fmt(scrapVal(it))}</small></button>`;
+    if (it.cert === false) row2 += it.consign ? `<button class="btn no span2" data-a="scrap">คืนพระให้เจ้าของ</button>` : `<button class="btn no span2" data-a="scrap">ทิ้ง / ขายเป็นของที่ระลึก<small>${fmt(it.share ? Math.round(scrapVal(it) / 2) : scrapVal(it))}</small></button>`;
     else if (it.pend) row2 += `<button class="btn span2" disabled>รอผลตรวจถึงพรุ่งนี้</button>`;
-    else row2 += (it.cert ? '' : `<button class="btn" data-a="cert">ส่งตรวจ<small>${fmt(fee)}</small></button>`) + `<button class="btn ok ${it.cert ? 'span2' : ''}" data-a="sell">ปล่อยเช่า<small>${fmt(offerFor(it))}</small></button>`;
+    else row2 += (it.cert ? '' : `<button class="btn" data-a="cert">ส่งตรวจ<small>${fmt(fee)}</small></button>`) + `<button class="btn ok ${it.cert ? 'span2' : ''}" data-a="sell">ปล่อยเช่า<small>${fmt(offerFor(it))}${it.consign || it.share ? ` • ได้ ${fmt(myCut(it, offerFor(it)))}` : ''}</small></button>`;
     el.innerHTML = rows(toolBtns(), row2);
   } else if (mode === 'daily') {
     el.innerHTML = rows(toolBtns(), D.run.rev ? `<button class="btn dim" data-a="dexit">ออก</button><button class="btn ok span2" data-a="dnext">${D.run.idx >= 4 ? 'ดูผลสรุป' : 'องค์ถัดไป'}</button>`
@@ -718,12 +725,73 @@ function negotiate() {
   else { c.ask = round100(c.ask * (1 - (.06 + Math.random() * .09))); c.line = `โอเค ๆ ลดให้เหลือ ${fmt(c.ask)} ก็แล้วกัน`; }
   render();
 }
+function takeItem(c, extra) { S.inv.unshift({ id: c.id, modelId: c.modelId, spec: c.spec, genuine: c.genuine, cond: c.cond, seed: c.seed, paid: c.ask, ask: c.ask, cert: null, pend: 0, award: 0, day: S.day, xp: false, ...extra }); }
 function buy() {
   const c = S.queue[0];
-  if (S.money < c.ask) { toast('เงินไม่พอรับเช่าองค์นี้', 'bad'); return; }
-  S.money -= c.ask; S.stats.bought++;
-  S.inv.unshift({ id: c.id, modelId: c.modelId, spec: c.spec, genuine: c.genuine, cond: c.cond, seed: c.seed, paid: c.ask, cert: null, pend: 0, award: 0, day: S.day, xp: false });
+  if (S.money < c.ask) { openModal(shortHTML()); return; }
+  S.money -= c.ask; S.stats.bought++; takeItem(c);
   sfx('buy'); toast(`รับเช่าแล้ว เก็บเข้าตู้พระ`, 'good'); nextCustomer();
+}
+/* เงินไม่พอ: ฝากขาย / เทิร์นพระ / ชวนเซียนลงหุ้น / ยืมเฮียโรงรับจำนำ */
+const shareHalf = c => Math.ceil(c.ask / 200) * 100;
+const loanRoom = () => Math.max(0, S.rep * 5000 - S.loan.amt);
+const loanNeed = c => Math.ceil((c.ask - S.money) / 100) * 100;
+const turnVal = it => round100(offerFor(it) * .85);
+const turnItems = () => S.inv.filter(it => it.cert !== false && !it.consign && !it.share && !it.pend);
+const loanLeftDays = () => S.loan.day + 10 - S.day;
+function optBtn(id, title, desc, why) { return `<button class="btn opt" data-short="${id}" ${why ? 'disabled' : ''}><b>${title}</b><small>${why ? 'ใช้ไม่ได้: ' + esc(why) : esc(desc)}</small></button>`; }
+function shortHTML() {
+  const c = S.queue[0], L = lvl(), half = shareHalf(c), need = loanNeed(c), tv = turnItems();
+  return `<h2>เงินไม่พอ จะทำยังไงดี?</h2><p>${esc(c.name)}ขอให้เช่า <b>${fmt(c.ask)}</b> • คุณมี ${fmt(S.money)} • ขาดอีก <b>${fmt(c.ask - S.money)}</b></p><div class="opts">` +
+    optBtn('consign', 'ก. รับฝากขาย', `ไม่ต้องจ่ายเงิน ขายได้แล้วจ่ายเจ้าของ ${fmt(c.ask)} ส่วนเกินเป็นกำไรคุณ (อย่างน้อย 10% ของราคาขาย) ถ้า 5 วันขายไม่ออกเจ้าของมารับคืน`, c.noConsign ? `${c.name}ไม่ยอมฝากขาย อยากได้เงินสด` : '') +
+    optBtn('turn', 'ข. เทิร์นพระ', 'เอาพระในตู้ไปแลก คิดมูลค่า 85% ของราคาที่มีคนให้เช่าวันนี้ แล้วจ่ายส่วนต่างเป็นเงิน', !tv.length ? 'ไม่มีพระในตู้ที่เทิร์นได้ (ของเก๊ ของฝากขาย ของหุ้น และองค์ที่รอผลตรวจใช้ไม่ได้)' : !tv.some(it => c.ask - turnVal(it) <= S.money) ? 'มูลค่าเทิร์นรวมกับเงินที่มียังไม่พอ' : '') +
+    optBtn('share', 'ค. ชวนเซียนลงหุ้น', `คุณจ่าย ${fmt(half)} เซียนเพื่อนจ่ายอีกครึ่ง ขายได้แบ่งเงินคนละครึ่ง`, L < 2 ? 'ปลดล็อกที่ Lv.2' : S.shareBan > S.day ? `เพื่อนยังไม่ไว้ใจ รอถึงวันที่ ${S.shareBan}` : S.money < half ? `ต้องมีเงินอย่างน้อย ${fmt(half)}` : '') +
+    optBtn('loan', 'ง. ยืมเงินเฮียโรงรับจำนำ', `ยืม ${fmt(need)} ดอกเบี้ย 3% ต่อวัน ต้องคืนภายใน 10 วัน ไม่งั้นโดนยึดพระในตู้และเสียชื่อเสียง`, need > loanRoom() ? `วงเงินเหลือ ${fmt(loanRoom())} (ชื่อเสียง × ฿5,000)` : '') +
+    `</div><div class="row"><button class="btn dim" data-close>ยกเลิก</button></div>`;
+}
+function turnHTML() {
+  const c = S.queue[0];
+  return `<h2>เลือกพระที่จะเทิร์น</h2><p>แลกกับ <b>${esc(modelById(c.modelId).name)}</b> ราคา ${fmt(c.ask)} • คุณมี ${fmt(S.money)}</p><div class="opts">` +
+    turnItems().map(it => { const v = turnVal(it), need = Math.max(0, c.ask - v), why = need > S.money ? `ต้องจ่ายเพิ่ม ${fmt(need)} เงินไม่พอ` : '';
+      return `<button class="btn opt tpick" data-turn="${it.id}" ${why ? 'disabled' : ''}><img data-thumb="i:${it.id}" alt=""><span><b>${esc(modelById(it.modelId).name)}</b><small>มูลค่าเทิร์น ${fmt(v)} • ${why ? 'ใช้ไม่ได้: ' + why : need ? `จ่ายเพิ่ม ${fmt(need)}` : 'ไม่ต้องจ่ายเพิ่ม (ลูกค้าไม่มีเงินทอน)'}</small></span></button>`; }).join('') +
+    `</div><div class="row"><button class="btn dim" id="shortBack">ย้อนกลับ</button></div>`;
+}
+function shortPick(k) {
+  const c = S.queue[0]; if (!c || S.money >= c.ask && k !== 'turn') { closeModal(); return; }
+  if (k === 'turn') { openModal(turnHTML()); return; }
+  if (k === 'consign') {
+    if (c.noConsign) return;
+    if (rng((c.seed >>> 0) + 77)() >= .3 + S.rep / 200) { c.noConsign = true; save(); toast(`${c.name}ไม่ยอมฝากขาย อยากได้เงินสดมากกว่า`, 'bad'); openModal(shortHTML()); return; }
+    closeModal(); takeItem(c, { paid: 0, consign: { price: c.ask, until: S.day + 5, owner: c.name } });
+    sfx('buy'); toast(`รับฝากขายแล้ว ขายได้จ่ายเจ้าของ ${fmt(c.ask)} ภายใน 5 วัน`, 'good'); nextCustomer(); return;
+  }
+  if (k === 'share') {
+    const half = shareHalf(c); if (lvl() < 2 || S.shareBan > S.day || S.money < half) return;
+    closeModal(); S.money -= half; S.stats.bought++; takeItem(c, { paid: half, share: true });
+    sfx('buy'); toast(`ลงหุ้นกับเซียนเพื่อนแล้ว คุณจ่าย ${fmt(half)}`, 'good'); nextCustomer(); return;
+  }
+  if (k === 'loan') {
+    const need = loanNeed(c); if (need > loanRoom()) return;
+    if (!S.loan.amt) S.loan.day = S.day; S.loan.amt += need; S.money += need;
+    closeModal(); toast(`ยืมเฮียมา ${fmt(need)} อย่าลืมคืนภายใน 10 วัน`); buy();
+  }
+}
+function doTurn(id) {
+  const c = S.queue[0], it = turnItems().find(x => String(x.id) === id); if (!c || !it) return;
+  const v = turnVal(it), need = Math.max(0, c.ask - v), m = modelById(it.modelId); if (need > S.money) return;
+  closeModal();
+  if (!it.genuine && Math.random() < .7) {
+    S.rep = Math.max(0, S.rep - 5); it.cert = false; it.xp = true; S.stats.fooled++;
+    toast(`${c.name}ส่องแล้วจับได้ว่า ${m.name} ที่เอามาเทิร์นเป็นของเก๊! ชื่อเสียง −5 แล้วเดินออกจากร้าน`, 'bad');
+    S.rejected.push({ modelId: c.modelId, genuine: c.genuine }); nextCustomer(); return;
+  }
+  S.money -= need; S.inv = S.inv.filter(x => x !== it); S.stats.bought++; takeItem(c);
+  sfx('buy'); toast(`เทิร์น ${m.name} (${fmt(v)})${need ? ` + จ่ายเพิ่ม ${fmt(need)}` : ''} ได้พระองค์ใหม่เข้าตู้`, 'good'); nextCustomer();
+}
+function repay() {
+  const p = Math.min(S.money, S.loan.amt); if (p <= 0) return;
+  S.money -= p; S.loan.amt -= p; if (!S.loan.amt) S.loan.day = 0;
+  toast(S.loan.amt ? `คืนเฮียไป ${fmt(p)} ยังเหลือหนี้ ${fmt(S.loan.amt)}` : 'ปลดหนี้เฮียหมดแล้ว!', 'good'); openModal(menuHTML()); render();
 }
 /* ชี้จุดเก๊: กด "ไม่เอา" แล้วให้ผู้เล่นแตะจุดที่คิดว่าผิดก่อนไปลูกค้าคนถัดไป (ชี้ได้ครั้งเดียวต่อองค์) */
 let spot = null;
@@ -769,16 +837,29 @@ function renderSpotBar() {
 const certFee = it => round100(Math.max(500, modelById(it.modelId).price * .03));
 const scrapVal = it => round100(modelById(it.modelId).price * .02);
 function offerFor(it) { const m = modelById(it.modelId), r = rng(hash(it.id + ':' + S.day)); return round100(m.price * cf(it.cond) * (it.cert ? 1.15 : 1) * (1 + .1 * it.award) * (1 + S.rep / 300) * (.9 + r() * .18)); }
-function revealXP(it) { const m = modelById(it.modelId); it.xp = true; return 15 + clamp(Math.round((m.price * cf(it.cond) - it.paid) / (m.price * .05)), 0, 20) * 2; }
+function revealXP(it) { const m = modelById(it.modelId); it.xp = true; return 15 + clamp(Math.round((m.price * cf(it.cond) - (it.ask ?? it.paid)) / (m.price * .05)), 0, 20) * 2; }
+// ส่วนที่เป็นของผู้เล่นเมื่อขายได้ p: ฝากขาย = ส่วนเกินราคาเจ้าของ (ขั้นต่ำ 10%), หุ้น = ครึ่งหนึ่ง
+function myCut(it, p) { return it.consign ? Math.max(p - it.consign.price, round100(p * .1)) : it.share ? Math.round(p / 2) : p; }
+// ของหุ้นถูกเปิดโปงว่าเก๊: เพื่อนไม่พอใจ ชื่อเสียง −3 และงดชวนลงหุ้น 3 วัน
+function shareFake(it) { if (!it.share || it.shareHit) return ''; it.shareHit = true; S.rep = Math.max(0, S.rep - 3); S.shareBan = S.day + 3; return ' • เซียนหุ้นส่วนไม่พอใจ ชื่อเสียง −3 และงดชวนลงหุ้น 3 วัน'; }
 function certify(it) { const fee = certFee(it); if (S.money < fee) { toast('เงินไม่พอจ่ายค่าตรวจ', 'bad'); return; } S.money -= fee; it.pend = S.day; toast('ส่งเข้าสมาคมตรวจพระแล้ว ผลออกวันพรุ่งนี้'); render(); }
 function sell(it) {
-  if (!it.genuine) { S.rep = Math.max(0, S.rep - 6); it.cert = false; it.xp = true; gainXP(3); S.stats.fooled++; toast('เซียนผู้ซื้อตรวจพบว่าเป็นพระเก๊! ชื่อเสียง −6', 'bad'); render(); return; }
-  const p = offerFor(it); S.money += p; S.inv = S.inv.filter(x => x !== it); S.rep = Math.min(100, S.rep + 1); S.stats.sold++;
-  gainXP((it.xp ? 0 : revealXP(it)) + 5 + clamp((p - it.paid) / 1000, 0, 40));
-  toast(`ปล่อยเช่าได้ ${fmt(p)} • ${p >= it.paid ? 'กำไร' : 'ขาดทุน'} ${fmt(Math.abs(p - it.paid))}`, p >= it.paid ? 'good' : 'bad');
+  if (!it.genuine) {
+    it.xp = true; gainXP(3); S.stats.fooled++;
+    if (it.consign) { S.rep = Math.max(0, S.rep - 8); S.inv = S.inv.filter(x => x !== it); toast(`เซียนผู้ซื้อตรวจพบว่าเป็นพระเก๊! ชื่อเสียง −8 และต้องคืนพระให้${it.consign.owner}`, 'bad'); toShop(); return; }
+    S.rep = Math.max(0, S.rep - 6); it.cert = false; toast('เซียนผู้ซื้อตรวจพบว่าเป็นพระเก๊! ชื่อเสียง −6' + shareFake(it), 'bad'); render(); return;
+  }
+  const p = offerFor(it), mine = myCut(it, p), gain = mine - it.paid; S.money += mine; S.inv = S.inv.filter(x => x !== it); S.rep = Math.min(100, S.rep + 1); S.stats.sold++;
+  gainXP((it.xp ? 0 : revealXP(it)) + 5 + clamp(gain / 1000, 0, 40));
+  const split = it.consign ? ` • จ่ายเจ้าของ ${fmt(p - mine)}` : it.share ? ` • แบ่งเพื่อน ${fmt(p - mine)}` : '';
+  toast(`ปล่อยเช่าได้ ${fmt(p)}${split} • ${gain >= 0 ? 'กำไร' : 'ขาดทุน'} ${fmt(Math.abs(gain))}`, gain >= 0 ? 'good' : 'bad');
   toShop();
 }
-function scrap(it) { S.money += scrapVal(it); S.inv = S.inv.filter(x => x !== it); toast(`ขายเป็นของที่ระลึก ได้ ${fmt(scrapVal(it))}`); toShop(); }
+function scrap(it) {
+  S.inv = S.inv.filter(x => x !== it);
+  if (it.consign) { toast(`คืนพระให้${it.consign.owner}แล้ว`); toShop(); return; }
+  const v = it.share ? Math.round(scrapVal(it) / 2) : scrapVal(it); S.money += v; toast(`ขายเป็นของที่ระลึก ได้ ${fmt(v)}${it.share ? ' (แบ่งเพื่อนครึ่งหนึ่ง)' : ''}`); toShop();
+}
 function toShop() { pauseDaily(); mode = 'shop'; ownItem = null; render(); }
 function openOwn(it) { pauseDaily(); mode = 'own'; ownItem = it; closeModal(); render(); }
 
@@ -787,7 +868,7 @@ function endDay() {
   for (const it of S.inv) if (it.pend) {
     it.pend = 0; it.cert = it.genuine; const m = modelById(it.modelId);
     if (it.genuine) { const x = it.xp ? 0 : revealXP(it); gainXP(x); lines.push(['good', `ผลตรวจ ${m.name}: แท้ ได้ใบรับรอง${x ? ` (+${x} XP)` : ''}`]); }
-    else { it.xp = true; gainXP(3); S.stats.fooled++; lines.push(['bad', `ผลตรวจ ${m.name}: ไม่แท้ เสียเงินไป ${fmt(it.paid)}`]); }
+    else { it.xp = true; gainXP(3); S.stats.fooled++; lines.push(['bad', `ผลตรวจ ${m.name}: ไม่แท้${it.consign ? ' (ของฝากขาย คืนเจ้าของได้)' : ` เสียเงินไป ${fmt(it.paid)}`}${shareFake(it)}`]); }
   }
   if (S.rejected.length) {
     const fakes = S.rejected.filter(x => !x.genuine).length, real = S.rejected.length - fakes; gainXP(fakes * 12);
@@ -814,7 +895,22 @@ function endDay() {
     lines.push(['good', `${cm.name}: บูชาออกไป ${n} องค์ รายได้ ${fmt(rev * .7)} (ถวายวัด ${fmt(rev * .3)})`]);
     if (b.sold >= b.qty) { b.done = true; S.rep = Math.min(100, S.rep + 5); gainXP(100); cm.price = Math.round(cm.price * 1.6); lines.push(['gold', `${cm.name} หมดเกลี้ยง! ชื่อเสียง +5 และราคาสะสมของรุ่นนี้พุ่งขึ้น`]); }
   }
+  for (const it of S.inv.filter(x => x.consign && S.day >= x.consign.until)) {
+    S.inv = S.inv.filter(x => x !== it); lines.push(['', `${it.consign.owner}มารับ ${modelById(it.modelId).name} คืน (ฝากขายครบ 5 วันแล้วยังขายไม่ออก)`]);
+  }
   const rent = 200 + 300 * L0; S.money -= rent; lines.push(['', `ค่าเช่าแผงพระ ${fmt(-rent)}`]);
+  if (S.loan.amt > 0) {
+    const fee = Math.round(S.loan.amt * .03); S.loan.amt += fee;
+    if (S.day >= S.loan.day + 10) {
+      // ครบ 10 วันยังไม่คืน: ยึดพระที่แพงที่สุดไล่ลงมาจนมูลค่าครอบหนี้ ที่ขาดหักจากเงินสด
+      const val = it => it.cert === false ? scrapVal(it) : offerFor(it), took = [];
+      let cover = 0; for (const it of S.inv.filter(x => !x.consign).sort((a, b) => val(b) - val(a))) { if (cover >= S.loan.amt) break; cover += val(it); took.push(it); }
+      S.inv = S.inv.filter(x => !took.includes(x)); if (cover < S.loan.amt) S.money -= S.loan.amt - cover;
+      S.rep = Math.max(0, S.rep - 10);
+      lines.push(['bad', `เฮียโรงรับจำนำมาทวงหนี้ ${fmt(S.loan.amt)}! ยึดพระไป ${took.length} องค์${took.length ? ` (${took.map(x => modelById(x.modelId).name).join(', ')})` : ''}${cover < S.loan.amt ? ` และหักเงินสด ${fmt(S.loan.amt - cover)}` : ''} • ชื่อเสียง −10`]);
+      S.loan = { amt: 0, day: 0 };
+    } else lines.push(['bad', `ดอกเบี้ยเฮีย 3% ${fmt(-fee)} • หนี้คงเหลือ ${fmt(S.loan.amt)} • เหลือ ${S.loan.day + 10 - S.day} วันก่อนโดนยึด`]);
+  }
   S.day++; genQueue(); mode = 'shop'; ownItem = null;
   const lv = levelHTML();
   openModal(`<h2>สรุปวันที่ ${S.day - 1}</h2><ul class="log">${lines.map(([k, t]) => `<li class="${k}">${esc(t)}</li>`).join('')}</ul>${lv}
@@ -925,14 +1021,14 @@ function invHTML() {
   return `<h2>ตู้พระ (${S.inv.length} องค์)</h2><p class="note">แตะองค์พระเพื่อส่องดู ส่งตรวจ หรือปล่อยเช่า</p><div class="grid">` +
     S.inv.map(it => { const m = modelById(it.modelId);
       const st = it.pend ? '<span class="badge">รอผลตรวจ</span>' : it.cert === true ? '<span class="badge good">แท้</span>' : it.cert === false ? '<span class="badge bad">เก๊</span>' : '<span class="badge">ยังไม่ตรวจ</span>';
-      return `<button class="item" data-own="${it.id}"><img class="thumb" data-thumb="i:${it.id}" alt=""><span class="nm">${esc(m.name)}</span><span class="sub">สภาพ ${it.cond} • ทุน ${fmt(it.paid)}</span><span>${st}${it.award ? ' <span class="badge gold">รางวัล</span>' : ''}</span></button>`; }).join('') + '</div>';
+      return `<button class="item" data-own="${it.id}"><img class="thumb" data-thumb="i:${it.id}" alt=""><span class="nm">${esc(m.name)}</span><span class="sub">สภาพ ${it.cond} • ${it.consign ? `ราคาเจ้าของ ${fmt(it.consign.price)}` : `ทุน ${fmt(it.paid)}`}</span><span class="tags">${st}${tagsOf(it)}${it.award ? '<span class="badge gold">รางวัล</span>' : ''}</span></button>`; }).join('') + '</div>';
 }
 function contestHTML() {
   const L = lvl();
   if (L < 3) return `<h2>งานประกวดพระ</h2><p>ปลดล็อกที่ Lv.3 เซียนเปิดแผง (XP ตอนนี้ ${S.xp}/${LEVELS[2].xp})</p>`;
   const nextDay = S.day % 3 === 0 && S.contestDay !== S.day ? S.day : S.day + (3 - S.day % 3);
   if (nextDay !== S.day) return `<h2>งานประกวดพระ</h2><p>งานจัดทุก 3 วัน ครั้งถัดไปคือ <b>วันที่ ${nextDay}</b></p><p class="note">เตรียมพระสภาพสวยที่มีใบรับรองไว้ เพิ่มโอกาสติดรางวัล ถ้าส่งของเก๊เข้าประกวดจะถูกคัดออกและเสียชื่อเสียง</p>`;
-  const ok = S.inv.filter(it => !it.pend && it.cert !== false);
+  const ok = S.inv.filter(it => !it.pend && it.cert !== false && !it.consign);
   return `<h2>งานประกวดพระ วันที่ ${S.day}</h2><p>เลือกได้สูงสุด 3 องค์ ค่าสมัครองค์ละ ${fmt(1000)} กรรมการให้คะแนนจากความแท้ สภาพ ความหายาก และใบรับรอง</p>` +
     (ok.length ? ok.map(it => { const m = modelById(it.modelId); return `<label class="pick"><input type="checkbox" value="${it.id}"><img data-thumb="i:${it.id}" alt=""><span><b>${esc(m.name)}</b><br><span class="note">สภาพ ${it.cond}${it.cert ? ' • มีใบรับรอง' : ''}</span></span></label>`; }).join('') + `<div class="row"><button class="btn ok" id="enterC">ส่งเข้าประกวด</button></div>`
       : '<p>ยังไม่มีพระที่ส่งประกวดได้ในตู้</p>');
@@ -944,10 +1040,11 @@ function runContest(ids) {
   S.money -= fee; S.contestDay = S.day;
   const res = items.map(it => {
     const m = modelById(it.modelId);
-    if (!it.genuine) { S.rep = Math.max(0, S.rep - 8); it.cert = false; it.xp = true; return ['bad', `${m.name}: ถูกคัดออก กรรมการตัดสินว่าไม่แท้ (ชื่อเสียง −8)`]; }
+    if (!it.genuine) { S.rep = Math.max(0, S.rep - 8); it.cert = false; it.xp = true; return ['bad', `${m.name}: ถูกคัดออก กรรมการตัดสินว่าไม่แท้ (ชื่อเสียง −8)${shareFake(it)}`]; }
+    const pk = it.share ? .5 : 1, ps = it.share ? ' (แบ่งเพื่อนครึ่งหนึ่ง)' : '';
     const sc = it.cond + Math.min(m.lvl, 6) * 4 + (it.cert ? 4 : 0) + Math.random() * 14;
-    if (sc >= 112) { S.money += Math.round(m.price * .15); gainXP(120); S.rep = Math.min(100, S.rep + 6); it.award = Math.max(it.award, 3); return ['gold', `${m.name}: ชนะเลิศ! เงินรางวัล ${fmt(m.price * .15)} +120 XP ชื่อเสียง +6`]; }
-    if (sc >= 102) { S.money += Math.round(m.price * .06); gainXP(70); S.rep = Math.min(100, S.rep + 3); it.award = Math.max(it.award, 2); return ['good', `${m.name}: รองชนะเลิศอันดับ 1 เงินรางวัล ${fmt(m.price * .06)} +70 XP`]; }
+    if (sc >= 112) { S.money += Math.round(m.price * .15 * pk); gainXP(120); S.rep = Math.min(100, S.rep + 6); it.award = Math.max(it.award, 3); return ['gold', `${m.name}: ชนะเลิศ! เงินรางวัล ${fmt(m.price * .15 * pk)}${ps} +120 XP ชื่อเสียง +6`]; }
+    if (sc >= 102) { S.money += Math.round(m.price * .06 * pk); gainXP(70); S.rep = Math.min(100, S.rep + 3); it.award = Math.max(it.award, 2); return ['good', `${m.name}: รองชนะเลิศอันดับ 1 เงินรางวัล ${fmt(m.price * .06 * pk)}${ps} +70 XP`]; }
     if (sc >= 94) { gainXP(40); S.rep = Math.min(100, S.rep + 1); it.award = Math.max(it.award, 1); return ['good', `${m.name}: รองชนะเลิศอันดับ 2 +40 XP`]; }
     gainXP(10); return ['', `${m.name}: ไม่ติดรางวัล (+10 XP)`];
   });
@@ -1004,6 +1101,8 @@ function buyTool(id) {
 }
 function menuHTML() {
   return `<h2>เมนู</h2>${dailyBtnHTML()}<h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
+  ${S.loan.amt ? `<h3>หนี้เฮียโรงรับจำนำ</h3><p>คงเหลือ <b class="debtc">${fmt(S.loan.amt)}</b> • ดอกเบี้ย 3% ต่อวัน • ${loanLeftDays() > 0 ? `อีก ${loanLeftDays()} วันจะโดนยึดพระ` : 'ครบกำหนดแล้ว ปิดร้านวันนี้จะโดนยึดพระ'}</p>
+  <div class="row"><button class="btn ok" id="repayBtn" ${S.money <= 0 ? 'disabled' : ''}>คืนเงิน ${fmt(Math.max(0, Math.min(S.money, S.loan.amt)))}${S.money < S.loan.amt ? '<small>(คืนได้เท่าที่มี)</small>' : ''}</button></div>` : ''}
   <div class="row"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
 }
 const HOW = `<h2>ยินดีต้อนรับสู่แผงพระของคุณ</h2>
@@ -1012,6 +1111,7 @@ const HOW = `<h2>ยินดีต้อนรับสู่แผงพระ
 <li>กด <b>ส่อง</b> เพื่อซูมดูผิวใกล้ ๆ เหมือนใช้กล้องส่องพระ (ซูมแล้วลากสองนิ้ว หรือ Shift+ลาก เพื่อเลื่อนดู)</li>
 <li>ถ้ากด <b>ไม่เอา</b> ให้แตะจุดที่คิดว่าผิดบนองค์พระ (หรือเลือกจากรายการ) ถ้าองค์นั้นเก๊และชี้ถูก ได้ +20 XP ทันที</li>
 <li><b>ต่อราคา</b> ได้ แต่ถ้าต่อมากไปลูกค้าจะเดินหนี รับเช่าแล้วไปที่ <b>ตู้พระ</b> เพื่อส่งตรวจหรือปล่อยเช่าทำกำไร</li>
+<li>เงินไม่พอ? กด <b>รับเช่า</b> แล้วเลือกได้: <b>รับฝากขาย</b> (ไม่ต้องจ่าย ขายได้ค่อยจ่ายเจ้าของ ภายใน 5 วัน), <b>เทิร์นพระ</b> ในตู้ (85% ของราคาวันนั้น), <b>ชวนเซียนลงหุ้น</b> ครึ่งหนึ่ง (Lv.2) หรือ <b>ยืมเฮียโรงรับจำนำ</b> (ดอก 3% ต่อวัน คืนใน 10 วัน คืนได้ในเมนู ≡) • ปล่อยเช่าของเก๊ที่รับฝากขายจะเสียชื่อเสียงหนัก</li>
 <li>ซื้อ <b>กล้องส่อง 20x</b>, <b>ไฟฉาย UV</b> และ <b>ตาชั่ง</b> ได้ที่ร้านอุปกรณ์เซียน (ในเมนู ≡ หรือสมุด) ไว้จับ "เก๊เทพ" ที่โผล่มาตั้งแต่ Lv.3</li>
 <li><b>ส่องพระประจำวัน</b> (ในเมนู ≡): 5 องค์ชุดเดียวกันทุกคน ตอบแค่แท้/เก๊ จับเวลา แล้วคัดลอกผลไปแชร์ เล่นได้วันละครั้ง</li>
 <li>สะสม XP ไต่ระดับ: Lv.3 ปลดล็อกงานประกวดพระ, Lv.5 ปลดล็อกการจัดสร้างพระกับวัด</li></ul>
@@ -1033,6 +1133,10 @@ $('#mbody').addEventListener('click', e => {
   const sk = e.target.closest('[data-spotk]'); if (sk) { closeModal(); commitSpot([sk.dataset.spotk]); return; }
   const bt = e.target.closest('[data-buytool]'); if (bt) { buyTool(bt.dataset.buytool); return; }
   if (e.target.id === 'toolShopBtn') { openModal(toolShopHTML()); return; }
+  const sh = e.target.closest('[data-short]'); if (sh) { if (!sh.disabled) shortPick(sh.dataset.short); return; }
+  const tn = e.target.closest('[data-turn]'); if (tn) { if (!tn.disabled) doTurn(tn.dataset.turn); return; }
+  if (e.target.id === 'shortBack') { openModal(shortHTML()); return; }
+  if (e.target.closest('#repayBtn')) { repay(); return; }
   if (e.target.closest('#dailyBtn')) { enterDaily(); return; }
   if (e.target.id === 'shareBtn') { shareDaily(); return; }
   if (e.target.id === 'enterC') runContest([...$('#mbody').querySelectorAll('.pick input:checked')].map(i => i.value));
