@@ -115,6 +115,25 @@ button,select,input{font:inherit;color:inherit}
 .bst{align-items:center;margin-top:8px}.bst span{flex:1 1 100%;font-size:14px}.bst .btn{flex:1 1 80px}
 .announce{text-align:center}.announce .good{color:#8ff0a8}
 @media(min-width:900px){.wiz .step{display:block}.wiz .stepnav,.wiz .stps{display:none}}
+.bars{display:flex;flex-direction:column;gap:6px;margin:10px 0 6px}
+.bar{display:grid;grid-template-columns:52px minmax(0,1fr) 34px;gap:8px;align-items:center;font:600 13px Kanit,sans-serif}
+.bar i{display:block;height:12px;background:#0006;border-radius:9px;overflow:hidden}
+.bar em{display:block;height:100%;background:linear-gradient(90deg,#ffd76a,#ff9f2e);border-radius:9px}
+.bar.heat em{background:linear-gradient(90deg,#ff8a5a,#d0201a)}
+.bar b{text-align:right;color:#ffe08a}
+.bf{font-size:14px;margin:4px 0}
+.chart svg{display:block;width:100%;height:90px;background:#0004;border-radius:10px}
+.chart .ln{fill:none;stroke:#ffd76a;stroke-width:2.5}.chart .area{fill:#ffd76a22}
+.chart .cl{display:flex;justify-content:space-between;font-size:12px;color:var(--mute);margin-top:2px}
+.bcard h4{font:600 16px Kanit,sans-serif;color:#ffe9c2;margin:12px 0 6px}.bcard h4 small{font-weight:400;color:var(--mute);font-size:12px}
+.bacts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.bacts .btn,.bcard .row .btn{border-radius:14px;font-size:15px}
+.btn.grey{background:linear-gradient(#9c8e86,#5d514b);color:#fff;border-color:#2e2622;box-shadow:inset 0 2px 0 #fff3,0 3px 0 #1d1714}
+.live .lvh{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font:600 14px Kanit,sans-serif;color:var(--mute)}
+.lvdot{background:#d0201a;color:#fff;padding:2px 10px;border-radius:6px}
+.cmt{display:flex;flex-direction:column;gap:2px;background:#ffffff12;border-radius:14px;padding:10px 14px;margin:10px 0;font-size:18px}
+.cmt b{font:600 14px Kanit,sans-serif;color:#9fd0ff}
+.fb{color:#8ff0a8;margin:6px 0}
 .span2{grid-column:span 2}.span3{grid-column:1/-1}
 .tabs{grid-area:tabs;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#0f0604;border-top:1px solid var(--line)}
 .tab{min-height:52px;border:0;background:none;cursor:pointer;font:600 14px Kanit,sans-serif;color:var(--mute);padding:4px 2px;position:relative}
