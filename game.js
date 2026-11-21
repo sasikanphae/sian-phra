@@ -18,6 +18,7 @@ const MATS = {
   powder: { name: 'เนื้อผงพุทธคุณ', base: [214, 199, 168], dark: [104, 88, 64], hi: [244, 236, 216], rough: .88, metal: 0 },
   copper: { name: 'เนื้อทองแดง', base: [168, 100, 62], dark: [48, 34, 26], hi: [238, 178, 126], rough: .42, metal: .85, patina: [70, 112, 84] },
   silver: { name: 'เนื้อเงิน', base: [196, 196, 198], dark: [52, 52, 58], hi: [250, 250, 250], rough: .3, metal: .95, patina: [90, 80, 70] },
+  lead:   { name: 'เนื้อตะกั่ว', base: [118, 120, 124], dark: [38, 38, 42], hi: [184, 186, 190], rough: .62, metal: .55, patina: [206, 202, 188] },
 };
 const THW = { thin: .07, mid: .11, thick: .17 };
 const TELLS = {
@@ -29,7 +30,8 @@ const TELLS = {
   back:   { label: 'ด้านหลัง', opts: ['plain', 'circle', 'square', 'yantra'], txt: { plain: 'หลังเรียบ มีรอยลายนิ้วมือ', circle: 'ตราประทับวงกลม', square: 'ตราประทับสี่เหลี่ยม', yantra: 'ยันต์ 3 แถว' } },
   edge:   { label: 'ขอบข้าง', opts: ['cut', 'round'], txt: { cut: 'ตัดเป็นเหลี่ยมคม', round: 'มนกลมเรียบ' } },
   thick:  { label: 'ความหนา (ดูด้านข้าง)', opts: ['thin', 'mid', 'thick'], txt: { thin: 'บาง', mid: 'หนาปานกลาง', thick: 'หนามาก' } },
-  grain:  { label: 'ผิวเนื้อ (ใช้กล้องส่อง)', opts: ['pores', 'crackle', 'smooth'], txt: { pores: 'มีรูพรุนเม็ดทรายเล็ก ๆ ทั่วองค์', crackle: 'มีรอยแตกลายงาทั่วผิว', smooth: 'ผิวเรียบตึง ไม่มีร่องรอยธรรมชาติ' } },
+  grain:  { label: 'ผิวเนื้อ (ใช้กล้องส่อง)', opts: ['pores', 'crackle', 'smooth', 'oxide'], txt: { pores: 'มีรูพรุนเม็ดทรายเล็ก ๆ ทั่วองค์', crackle: 'มีรอยแตกลายงาทั่วผิว', smooth: 'ผิวเรียบตึง ไม่มีร่องรอยธรรมชาติ', oxide: 'มีคราบไขขาวเป็นดวง ๆ เกาะตามผิว' } },
+  palm:   { label: 'ยันต์ที่ฝ่ามือ (ใช้กล้องส่อง)', opts: ['una', 'na', 'plain'], txt: { una: 'ยันต์อุณาโลมนูนบนฝ่ามือทั้งสองข้าง', na: 'ยันต์ตัวขอมขีดเดียวบนฝ่ามือ', plain: 'ฝ่ามือเรียบ ไม่มียันต์' } },
   loop:   { label: 'หูเหรียญ', opts: ['weld', 'cast'], txt: { weld: 'หูเชื่อม: ห่วงกลมแยกชิ้น', cast: 'หูตัน: แผ่นแบนหล่อติดเหรียญ' } },
 };
 const tellTxt = (k, v) => { const t = TELLS[k].txt; return typeof t === 'function' ? t(v) : t[v]; };
@@ -42,6 +44,8 @@ const MODELS = [
     spec: { hand: 'mara', petals: 5, flame: 'tall', back: 'yantra', loop: 'weld' } },
   { id: 'sum', name: 'พระซุ้มเรือนแก้ว วัดทุ่งทอง', shape: 'arch', mat: 'clay', lvl: 3, price: 160000,
     spec: { hand: 'mara', petals: 7, dots: 13, flame: 'tall', back: 'plain', edge: 'cut', thick: 'thick', grain: 'pores' } },
+  { id: 'pidta', name: 'พระปิดตา วัดบ้านนา', shape: 'pidta', mat: 'lead', lvl: 4, price: 320000,
+    spec: { palm: 'una', back: 'yantra', edge: 'round', thick: 'thick', grain: 'oxide' } },
   { id: 'somdejG', name: 'พระสมเด็จพิมพ์ใหญ่ กรุเก่า วัดศรีมงคล', shape: 'rect', mat: 'powder', gold: true, lvl: 4, price: 680000,
     spec: { hand: 'samadhi', tiers: 3, flame: 'tall', back: 'circle', edge: 'cut', thick: 'mid', grain: 'crackle' } },
   { id: 'coin2', name: 'เหรียญเงินรุ่นพิเศษ วัดหนองบัว', shape: 'oval', mat: 'silver', lvl: 5, price: 1800000,
@@ -51,7 +55,7 @@ const LEVELS = [
   { xp: 0, name: 'มือใหม่หัดส่อง' }, { xp: 120, name: 'นักเลงพระ' }, { xp: 350, name: 'เซียนเปิดแผง' },
   { xp: 800, name: 'เซียนดังประจำสนาม' }, { xp: 1600, name: 'เซียนใหญ่' }, { xp: 3000, name: 'ปรมาจารย์วงการพระ' },
 ];
-const UNLOCK = { 2: 'ลูกค้าเริ่มนำ "เหรียญรุ่นแรก วัดหนองบัว" มาเสนอ', 3: 'ปลดล็อก งานประกวดพระ และ "พระซุ้มเรือนแก้ว วัดทุ่งทอง"', 4: 'ปลดล็อก "พระสมเด็จพิมพ์ใหญ่ กรุเก่า" องค์หลักแสน', 5: 'ปลดล็อก จัดสร้างพระกับวัด และ "เหรียญเงินรุ่นพิเศษ"', 6: 'คุณคือปรมาจารย์วงการพระแล้ว!' };
+const UNLOCK = { 2: 'ลูกค้าเริ่มนำ "เหรียญรุ่นแรก วัดหนองบัว" มาเสนอ', 3: 'ปลดล็อก งานประกวดพระ และ "พระซุ้มเรือนแก้ว วัดทุ่งทอง"', 4: 'ปลดล็อก "พระสมเด็จพิมพ์ใหญ่ กรุเก่า" องค์หลักแสน และ "พระปิดตา วัดบ้านนา" เนื้อตะกั่ว', 5: 'ปลดล็อก จัดสร้างพระกับวัด และ "เหรียญเงินรุ่นพิเศษ"', 6: 'คุณคือปรมาจารย์วงการพระแล้ว!' };
 const TEMPLES = [
   { id: 'pa', name: 'วัดป่าสันติธรรม', fame: 1, rep: 0 },
   { id: 'tt', name: 'วัดทุ่งทอง', fame: 1.6, rep: 35 },
@@ -87,6 +91,11 @@ function outlinePts(shape) {
       const p = pts[i], pv = pts[(i + 2) % 3], nx = pts[(i + 1) % 3];
       const a = [lerp(p[0], pv[0], k), lerp(p[1], pv[1], k)], b = [lerp(p[0], nx[0], k), lerp(p[1], nx[1], k)];
       for (let j = 0; j <= 6; j++) P.push(qb(a, p, b, j / 6));
+    }
+  } else if (shape === 'pidta') {
+    for (let i = 0; i < 72; i++) {
+      const a = i / 72 * Math.PI * 2; let y = .52 + Math.sin(a) * .47; const k = .82 + .18 * clamp((y - .05) / .8, 0, 1);
+      y = Math.min(y, .94); P.push([.5 + Math.cos(a) * .45 * k, y]);
     }
   } else {
     for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; P.push([.5 + Math.cos(a) * .45, .54 + Math.sin(a) * .43]); }
@@ -125,7 +134,24 @@ function unalom(x, cx, cy, R, v) {
   for (let i = 0; i <= 20; i++) x.lineTo(cx + Math.sin(i * .9) * R * .12, cy + R * .1 - i / 20 * R * .9);
   x.stroke(); x.restore();
 }
-const FIG = { rect: { cx: 256, by: 440, s: 300 }, tri: { cx: 256, by: 520, s: 320 }, arch: { cx: 256, by: 480, s: 290 }, oval: { cx: 256, by: 452, s: 262 } };
+const FIG = { rect: { cx: 256, by: 440, s: 300 }, tri: { cx: 256, by: 520, s: 320 }, arch: { cx: 256, by: 480, s: 290 }, oval: { cx: 256, by: 452, s: 262 }, pidta: { cx: 256, by: 528, s: 330 } };
+function drawPidta(x, f, spec) {
+  const { cx, by, s } = f;
+  slab(x, cx - s * .52, by + 4, s * 1.04, s * .06, 130);
+  dome(x, cx, by - s * .08, s * .52, s * .15, 165, .45);
+  dome(x, cx - s * .32, by - s * .07, s * .13, s * .075, 188, .55); dome(x, cx + s * .32, by - s * .07, s * .13, s * .075, 188, .55);
+  dome(x, cx, by - s * .38, s * .32, s * .3, 178, .5);
+  for (const k of [-1, 1]) limb(x, [[cx + k * s * .27, by - s * .5], [cx + k * s * .36, by - s * .64], [cx + k * s * .16, by - s * .8]], s * .085, 192);
+  dome(x, cx, by - s * .86, s * .25, s * .22, 186, .5);
+  dome(x, cx, by - s * 1.08, s * .07, s * .055, 180, .5);
+  for (const k of [-1, 1]) {
+    const px = cx + k * s * .115, py = by - s * .85;
+    dome(x, px, py, s * .13, s * .16, 214, .62);
+    for (let j = 0; j < 4; j++) dome(x, px + (j - 1.5) * s * .05, py - s * .14, s * .022, s * .03, 205, .6);
+    if (spec.palm === 'una') unalom(x, px, py - s * .02, s * .11, 250);
+    else if (spec.palm === 'na') glyph(x, px + s * .03, py, s * .17, rng(hash('pidta:na' + k)), 250);
+  }
+}
 function drawFigure(x, f, spec) {
   const { cx, by, s } = f;
   if (spec.tiers) { for (let i = 0; i < spec.tiers; i++) { const w = s * (.7 + .13 * i); slab(x, cx - w / 2, by + 6 + i * (s * .065 + 5), w, s * .065, 150); } }
@@ -178,7 +204,7 @@ function drawFront(x, m, spec) {
     slab(x, .27 * TW, .84 * TH, .46 * TW, .055 * TH, 105);
     const r = rng(hash(m.id + ':txt')); for (let i = 0; i < 6; i++) glyph(x, .31 * TW + i * .075 * TW, .867 * TH, 26, r, 165);
   }
-  drawFigure(x, FIG[sh], spec);
+  if (sh === 'pidta') drawPidta(x, FIG[sh], spec); else drawFigure(x, FIG[sh], spec);
 }
 function drawBack(x, m, spec, r) {
   const P = outlinePts(m.shape), metal = MATS[m.mat].metal > 0, cx = TW / 2, cy = TH * .53;
@@ -239,7 +265,7 @@ function makeFace(m, spec, cond, seed, res, side, D) {
     if (v > capH) v = capH + (v - capH) * .3;
     h[i] = Math.max(0, v) * soft[i] * soft[i];
   }
-  const det = new Uint8Array(N);
+  const det = new Uint8Array(N), oxA = grain === 'oxide' ? new Float32Array(N) : null;
   if (grain === 'pores') {
     for (let k = 0, n = Math.round(2600 * res * res); k < n; k++) {
       const px = Math.floor(r() * W), py = Math.floor(r() * H), rad = r() < .8 ? 1 : 2;
@@ -249,6 +275,9 @@ function makeFace(m, spec, cond, seed, res, side, D) {
     const cc = mk(W, H), cx2 = cc.getContext('2d', { willReadFrequently: true }); cx2.strokeStyle = '#fff'; cx2.lineWidth = Math.max(1, 1.3 * res);
     for (let k = 0; k < 46; k++) { let px = r() * W, py = r() * H, a = r() * 6.28; cx2.beginPath(); cx2.moveTo(px, py); for (let s = 0, n = 12 + r() * 40; s < n; s++) { a += (r() - .5) * 1.1; px += Math.cos(a) * 6 * res; py += Math.sin(a) * 6 * res; cx2.lineTo(px, py); } cx2.stroke(); }
     const cr = chan(cc); for (let i = 0; i < N; i++) if (cr[i] > .3) { det[i] = 2; h[i] = Math.max(0, h[i] - .02 * cr[i]); }
+  } else if (grain === 'oxide') {
+    const ox = noise(W, H, 16, r), sp = noise(W, H, 70, r);
+    for (let i = 0; i < N; i++) { const k = clamp((ox[i] - .6) * 7, 0, 1) * clamp((sp[i] - .45) * 4, 0, 1); if (k > .05) { det[i] = 3; oxA[i] = k; h[i] += .008 * k; } }
   }
   const B = boxBlur(h, W, H, Math.max(2, Math.round(10 * res)));
   x.globalCompositeOperation = 'source-over'; x.setTransform(1, 0, 0, 1, 0, 0);
@@ -264,6 +293,7 @@ function makeFace(m, spec, cond, seed, res, side, D) {
     if (mat.patina) col = col.map((c0, q) => lerp(c0, mat.patina[q], cav * .65 * v));
     if (m.gold && h[i] > .25 && hi[i] > .58) col = col.map((c0, q) => lerp(c0, [214, 168, 62][q], .78));
     if (det[i] === 1) col = col.map(c0 => c0 * .55); else if (det[i] === 2) col = col.map(c0 => c0 * .52);
+    else if (det[i] === 3) col = col.map((c0, q) => lerp(c0, [226, 222, 206][q], .62 * oxA[i]));
     d[j] = col[0]; d[j + 1] = col[1]; d[j + 2] = col[2]; d[j + 3] = 255;
     const hl = h[y * W + Math.max(xx - 1, 0)], hr = h[y * W + Math.min(xx + 1, W - 1)], hu = h[Math.max(y - 1, 0) * W + xx], hd = h[Math.min(y + 1, H - 1) * W + xx];
     let ax = (hl - hr) * K, ay = (hd - hu) * K; const L = Math.hypot(ax, ay, 1);
@@ -367,7 +397,7 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); V.zt = clamp(V.zt * 
 canvas.addEventListener('dblclick', () => resetView());
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 function resetView() { V.reset = new THREE.Quaternion(); V.zt = 1; V.vx = V.vy = 0; }
-function flip() { V.spin = Math.PI; V.vx = V.vy = 0; V.reset = null; }
+function flip() { sfx('flip'); V.spin = Math.PI; V.vx = V.vy = 0; V.reset = null; }
 function toggleLoupe() { V.zt = V.zt > .6 ? .32 : 1; if (V.zt === 1) { V.px = V.py = 0; } }
 let cur = null;
 function showAmulet(m, spec, cond, seed) {
@@ -408,6 +438,43 @@ function fillThumbs(root) {
     else { const it = S.inv.find(i => String(i.id) === id); if (it) thumbLater('i:' + id, [modelById(it.modelId), it.spec, it.cond, it.seed, ['front']], urls => { el.src = urls[0]; }); }
   });
 }
+
+/* ================= sound (Web Audio, synthesized, no files) ================= */
+let AC = null, OUTG = null;
+function audio() {
+  if (S && S.mute) return null;
+  try {
+    if (!AC) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; AC = new C(); OUTG = AC.createGain(); OUTG.gain.value = .5; OUTG.connect(AC.destination); }
+    if (AC.state === 'suspended') AC.resume();
+  } catch (e) { return null; }
+  return AC;
+}
+function tone(a, t, f, dur, { type = 'sine', vol = .2, f2 = 0, att = .006 } = {}) {
+  const o = a.createOscillator(), gn = a.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+  gn.gain.setValueAtTime(.0001, t); gn.gain.exponentialRampToValueAtTime(vol, t + att); gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(gn).connect(OUTG); o.start(t); o.stop(t + dur + .05);
+}
+function bell(a, t, f, dur, vol) { [[1, 1], [2.76, .45], [5.4, .22], [8.9, .1]].forEach(([k, v]) => tone(a, t, f * k, dur / k ** .4, { vol: vol * v })); }
+function whoosh(a, t, dur, f0, f1, vol) {
+  const n = Math.ceil(a.sampleRate * dur), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const src = a.createBufferSource(), bp = a.createBiquadFilter(), gn = a.createGain(); src.buffer = buf;
+  bp.type = 'bandpass'; bp.Q.value = 1.4; bp.frequency.setValueAtTime(f0, t); bp.frequency.exponentialRampToValueAtTime(f1, t + dur * .6);
+  gn.gain.setValueAtTime(.0001, t); gn.gain.exponentialRampToValueAtTime(vol, t + dur * .35); gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  src.connect(bp).connect(gn).connect(OUTG); src.start(t); src.stop(t + dur);
+}
+const SFX = {
+  // รับเช่า: เหรียญกระทบกันสองที + เสียงวางพระลงถาด
+  buy: (a, t) => { tone(a, t, 180, .12, { type: 'triangle', vol: .25, f2: 90 }); bell(a, t + .04, 1568, .5, .14); bell(a, t + .14, 2093, .7, .12); },
+  // พลิกพระ: ลมพลิก + เสียงองค์พระแตะถาด
+  flip: (a, t) => { whoosh(a, t, .32, 500, 2400, .35); tone(a, t + .3, 620, .09, { type: 'triangle', vol: .16, f2: 380 }); },
+  // เลื่อนระดับ: ระนาดไล่บันไดเสียงเพนทาโทนิก แล้วตีฆ้อง
+  level: (a, t) => {
+    [523, 587, 659, 784, 880, 1047].forEach((f, i) => { tone(a, t + i * .09, f, .32, { type: 'triangle', vol: .17 }); tone(a, t + i * .09, f * 2, .12, { vol: .05 }); });
+    const g0 = t + .62; tone(a, g0, 98, 2.6, { vol: .32, f2: 94, att: .01 }); tone(a, g0, 196 * 1.01, 1.8, { vol: .12 }); tone(a, g0, 293, 1.2, { vol: .06 }); bell(a, g0, 1047, 1.4, .08);
+  },
+};
+function sfx(name) { const a = audio(); if (!a || !SFX[name]) return; try { SFX[name](a, a.currentTime + .01); } catch (e) { /* audio unavailable */ } }
 
 /* ================= state ================= */
 const KEY = 'sianphra_v1';
@@ -530,7 +597,7 @@ function buy() {
   if (S.money < c.ask) { toast('เงินไม่พอรับเช่าองค์นี้', 'bad'); return; }
   S.money -= c.ask; S.stats.bought++;
   S.inv.unshift({ id: c.id, modelId: c.modelId, spec: c.spec, genuine: c.genuine, cond: c.cond, seed: c.seed, paid: c.ask, cert: null, pend: 0, award: 0, day: S.day, xp: false });
-  toast(`รับเช่าแล้ว เก็บเข้าตู้พระ`, 'good'); nextCustomer();
+  sfx('buy'); toast(`รับเช่าแล้ว เก็บเข้าตู้พระ`, 'good'); nextCustomer();
 }
 function pass() { const c = S.queue[0]; S.rejected.push({ modelId: c.modelId, genuine: c.genuine }); nextCustomer(); }
 const certFee = it => round100(Math.max(500, modelById(it.modelId).price * .03));
@@ -586,7 +653,7 @@ function endDay() {
 function levelHTML() {
   const L = lvl(); if (L <= S.lvlSeen) return '';
   let h = ''; for (let l = S.lvlSeen + 1; l <= L; l++) h += `<li class="gold">${esc(UNLOCK[l] || '')}</li>`;
-  S.lvlSeen = L; save();
+  S.lvlSeen = L; save(); sfx('level');
   return `<h3>เลื่อนระดับเป็น Lv.${L} ${esc(LEVELS[L - 1].name)}!</h3><ul class="log">${h}</ul>`;
 }
 
@@ -681,7 +748,7 @@ function makeBatch() {
 }
 function menuHTML() {
   return `<h2>เมนู</h2><h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • XP ${S.xp}</p>
-  <div class="row"><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
+  <div class="row"><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
 }
 const HOW = `<h2>ยินดีต้อนรับสู่แผงพระของคุณ</h2>
 <ul class="log"><li>ลูกค้าจะนำพระมาเสนอให้เช่า ลากเพื่อหมุนองค์พระได้รอบ 360° ดูทั้งด้านหน้า ด้านหลัง และขอบข้าง</li>
@@ -707,8 +774,9 @@ $('#mbody').addEventListener('click', e => {
   if (e.target.id === 'enterC') runContest([...$('#mbody').querySelectorAll('.pick input:checked')].map(i => i.value));
   if (e.target.id === 'makeB') makeBatch();
   if (e.target.id === 'howBtn') openModal(HOW);
+  if (e.target.id === 'soundBtn') { S.mute = !S.mute; save(); openModal(menuHTML()); sfx('buy'); }
   if (e.target.id === 'resetBtn') openModal(`<h2>เริ่มเกมใหม่?</h2><p>เงิน เลเวล และพระในตู้ทั้งหมดจะหายไป</p><div class="row"><button class="btn dim" data-close>ยกเลิก</button><button class="btn no" id="resetYes">ยืนยัน เริ่มใหม่</button></div>`);
-  if (e.target.id === 'resetYes') { S = newGame(); genQueue(); mode = 'shop'; ownItem = null; lastShown = null; closeModal(); render(); }
+  if (e.target.id === 'resetYes') { const mute = S.mute; S = newGame(); S.mute = mute; genQueue(); mode = 'shop'; ownItem = null; lastShown = null; closeModal(); render(); }
 });
 $('#mbody').addEventListener('change', e => {
   const k = e.target.dataset.tf; if (k) { TF[k] = k === 'qty' ? +e.target.value : e.target.value; openModal(templeHTML()); }

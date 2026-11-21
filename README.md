@@ -2,6 +2,12 @@
 
 เกมเว็บจำลองการเป็นเซียนพระ มีองค์พระ 3D หมุนได้ 360° แยกพระแท้/เก๊ ไต่เลเวล งานประกวดพระ และจัดสร้างพระกับวัด
 
+## เล่นออนไลน์
+https://sasikanphae.github.io/sian-phra/
+
+ทุกครั้งที่ push เข้า branch `main` GitHub Actions จะ deploy ขึ้น GitHub Pages ให้อัตโนมัติ
+(ครั้งแรกต้องตั้งค่าใน repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**)
+
 ## รันเกมบนเครื่อง
 ต้องเปิดผ่าน web server (ดับเบิลคลิก index.html ตรง ๆ จะไม่ทำงาน)
 
