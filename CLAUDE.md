@@ -5,6 +5,7 @@
 
 ## Tech
 - HTML/CSS/JS ล้วน ไม่มี build step — `index.html` + `game.js` (ES module) + `three.module.min.js` (three.js r170, local copy)
+- Deploy: GitHub Pages ผ่าน `.github/workflows/pages.yml` (push เข้า `main` แล้ว deploy อัตโนมัติ) — ถ้าเพิ่มไฟล์ที่เกมต้องโหลด ต้องเพิ่มในขั้น `cp` ของ workflow ด้วย
 - รันด้วย static server ใดก็ได้ เช่น `npx serve .` หรือ `python3 -m http.server 8000` (เปิดไฟล์ตรง ๆ ด้วย file:// ไม่ได้ เพราะ ES module)
 - เซฟเกมใน `localStorage` key `sianphra_v1` (ครอบ try/catch ไว้)
 
@@ -15,6 +16,7 @@
 4. **procedural amulet 3D** — `buildAmulet(model, spec, cond, seed, res)` = ExtrudeGeometry (ตัวองค์ + ขอบ cut/round + ความหนา) + plane หน้า/หลังที่ใช้ displacement + หูเหรียญ (เชื่อม/ตัน)
 5. **main view** — renderer หลัก, หมุนแบบ trackball (quaternion), pinch/wheel zoom, pan, พลิก, ส่อง (loupe)
 6. **thumbnails** — renderer ตัวที่สอง (preserveDrawingBuffer) ทำภาพ หน้า/หลัง/ข้าง สำหรับสมุดและตู้พระ แบบคิวทีละงาน
+6.5 **sound** — เสียงสังเคราะห์ด้วย Web Audio (ไม่ใช้ไฟล์) `sfx('buy' | 'flip' | 'level')`; ปิดเสียงได้ในเมนู (`S.mute`)
 7. **state** — `S` (เงิน, xp, ชื่อเสียง, วัน, inv, queue, batches, custom models), `makeCustomer`, `mutate` (สร้างของเก๊โดยเปลี่ยน tell 1–3 จุด)
 8. **rendering** — `render()` วาด HUD / การ์ดลูกค้า / ปุ่ม / แท็บ; โหมด `shop` (หน้าร้าน) กับ `own` (ส่ององค์ในตู้)
 9. **actions** — ต่อราคา, รับเช่า, ส่งตรวจ, ปล่อยเช่า, `endDay()` (ผลตรวจ, เฉลยองค์ที่ปฏิเสธ, ยอดบูชารุ่นที่จัดสร้าง, ค่าแผง)
