@@ -35,6 +35,8 @@ const TELLS = {
   // จุดสังเกตแฝง: ไม่อยู่ใน spec ขององค์ครู (ใช้ค่า def) ของเก๊ทั่วไปไม่เปลี่ยน มีแต่ "เก๊เทพ" ที่ผิดตรงนี้
   resin:  { label: 'เรืองแสงใต้ไฟ UV', hidden: true, def: 'no', opts: ['no', 'yes'], txt: { no: 'ไม่เรืองแสง (ของแท้ไม่เรืองแสงใต้ UV)', yes: 'เรืองแสงสีฟ้าอมเขียว: เนื้อเรซิ่นปลอม' } },
   weight: { label: 'น้ำหนัก (ใช้ตาชั่ง)', hidden: true, def: 'std', opts: ['std', 'light', 'heavy'], txt: { std: 'ตรงกับองค์ครู (คลาดเคลื่อนไม่เกิน ±3%)', light: 'เบากว่าองค์ครู 12–25%', heavy: 'หนักกว่าองค์ครู 12–25%' } },
+  // มวลสาร: ค่าเป็นสตริง id เรียงตัวอักษรคั่นด้วย + ต่อท้าย * = ของเทียม เช่น 'gold+wan*'
+  ingr:   { label: 'มวลสาร (ใช้กล้องส่อง)', txt: v => ingrTxt(v), mut: (r, v) => mutIngr(r, v) },
   loop:   { label: 'หูเหรียญ', opts: ['weld', 'cast'], txt: { weld: 'หูเชื่อม: ห่วงกลมแยกชิ้น', cast: 'หูตัน: แผ่นแบนหล่อติดเหรียญ' } },
 };
 const tellTxt = (k, v) => { const t = TELLS[k].txt; return typeof t === 'function' ? t(v) : t[v]; };
@@ -72,6 +74,36 @@ const TOOLS = [
   { id: 'uv', name: 'ไฟฉาย UV', price: 40000, lvl: 2, desc: 'เพิ่มปุ่ม "UV" ส่องในที่มืดใต้แสงม่วง เนื้อเรซิ่นปลอมจะเรืองแสงสีฟ้าอมเขียว ของแท้ไม่เรืองแสง' },
   { id: 'scale', name: 'ตาชั่งดิจิทัล', price: 80000, lvl: 3, desc: 'แสดงน้ำหนักองค์พระเป็นกรัมในการ์ด เทียบกับน้ำหนักองค์ครูในสมุด ของแท้คลาดเคลื่อนไม่เกิน ±3%' },
 ];
+// มวลสาร (สมมติทั้งหมด): cost = บาท/องค์, hype = กระแสเริ่มต้น, price = ราคาสะสม +%, kind = รูปร่างที่วาดบนเนื้อพระ, col = สี (เหรียญโลหะใช้เป็นสีที่ผสมเข้าเนื้อ)
+const INGR = {
+  powderOld: { name: 'ผงพุทธคุณเก่า', cost: 4, hype: 0, price: 0, kind: 'dot', col: [236, 226, 196], look: 'เม็ดขาวนวลเล็ก ๆ' },
+  gold:      { name: 'ทองคำเปลว', cost: 25, hype: 5, price: 0, kind: 'flake', col: [248, 202, 70], look: 'จุดทองระยิบ' },
+  wan:       { name: 'ว่านมงคล 108', cost: 12, hype: 0, price: .10, kind: 'dot', col: [34, 90, 46], look: 'เม็ดเขียวเข้ม' },
+  tabai:     { name: 'ผงตะไบพระกริ่ง', cost: 30, hype: 0, price: .15, kind: 'metal', col: [222, 222, 228], look: 'เศษโลหะแวววาว', lvl: 5 },
+  hair:      { name: 'เกศาครูบาอาจารย์', cost: 15, hype: 8, price: 0, kind: 'hair', col: [20, 16, 14], look: 'เส้นดำเล็ก ๆ', trust: 50 },
+  itje:      { name: 'ผงอิทธิเจ', cost: 14, hype: 5, price: .05, kind: 'dot', col: [120, 142, 176], look: 'เม็ดเทาอมฟ้า' },
+  rice:      { name: 'ข้าวสารเสก', cost: 1, hype: 0, price: 0, kind: 'grain', col: [250, 248, 238], look: 'เม็ดขาวรี' },
+  kaka:      { name: 'ดินกากยายักษ์', cost: 20, hype: 12, price: .20, kind: 'shiny', col: [16, 14, 12], look: 'เม็ดดำมันวาว', award: true },
+};
+// ตำรับลับ: ต้องใช้มวลสารของจริงครบทุกอย่างใน need (ไม่เฉลยในเกม)
+const RECIPES = [
+  { id: 'wealth', name: 'ตำรับมหาโภคทรัพย์', need: ['gold', 'wan', 'powderOld'], hype: 15, price: 0, txt: 'กระแสเริ่มต้น +15' },
+  { id: 'metta', name: 'ตำรับเมตตามหานิยม', need: ['hair', 'itje', 'rice'], hype: 0, price: .25, txt: 'ราคาสะสม +25%' },
+  { id: 'power', name: 'ตำรับมหาอำนาจบารมี', need: ['kaka', 'tabai', 'gold'], hype: 10, price: .15, txt: 'กระแสเริ่มต้น +10 และราคาสะสม +15%' },
+  { id: 'safe', name: 'ตำรับแคล้วคลาดคุ้มภัย', need: ['wan', 'rice', 'itje', 'powderOld'], hype: 8, price: .10, txt: 'กระแสเริ่มต้น +8 และราคาสะสม +10%' },
+];
+const LUCKY = ['รวย', 'เฮง', 'มั่งมี', 'ลาภ', 'แคล้วคลาด', 'เมตตา'];
+const NAME_A = ['รวย', 'เฮง', 'มั่งมี', 'มหาลาภ', 'แคล้วคลาด', 'เมตตา', 'บารมี'], NAME_B = ['ทันใจ', 'ล้นฟ้า', 'ร้อยล้าน', 'คุ้มภัย', 'พูนทรัพย์'];
+const ingrList = v => v ? v.split('+').map(x => ({ id: x.replace('*', ''), fake: x.endsWith('*') })).filter(x => INGR[x.id]) : [];
+const ingrKey = l => l.map(x => x.id + (x.fake ? '*' : '')).sort().join('+');
+const ingrTxt = v => { const l = ingrList(v); return l.length ? l.map(x => INGR[x.id].name + (x.fake ? ' (เทียม)' : '')).join(', ') : 'ไม่มีมวลสาร'; };
+// ของเก๊: ขาดมวลสาร 1–2 อย่าง หรือใส่ผิดชนิด และเป็นของเทียมทั้งหมด
+function mutIngr(r, v) {
+  const l = ingrList(v).map(x => x.id);
+  if (l.length && r() < .55) { for (let i = 0, k = Math.min(l.length, 1 + Math.floor(r() * 2)); i < k; i++) l.splice(Math.floor(r() * l.length), 1); }
+  else { const nw = pick(r, Object.keys(INGR).filter(p => !l.includes(p))); if (l.length) l[Math.floor(r() * l.length)] = nw; else l.push(nw); }
+  return ingrKey(l.map(id => ({ id, fake: true })));
+}
 const UNIT = { clay: 40, powder: 60, copper: 120, silver: 600 };
 const NAMES = ['ลุงสมชาย', 'ป้าบุญมี', 'เฮียเส็ง', 'เจ๊หมวย', 'พี่โอ๊ค', 'น้องต้น', 'ตาเปลี่ยน', 'คุณนิด', 'พี่บอย', 'ยายจันทร์', 'เสี่ยเปา', 'ลุงแดง', 'พี่หนิง', 'น้าเขียว', 'คุณวิชัย', 'อาจารย์ประยูร'];
 const HONEST = ['ของตกทอดจากคุณพ่อ เก็บในตู้มาหลายสิบปีแล้วครับ', 'ได้รับแจกตอนบวชเมื่อนานมาแล้ว ไม่เคยเอาไปส่องที่ไหนเลย', 'คุณยายห้อยคอมาทั้งชีวิต ลูกหลานอยากให้คนที่รู้คุณค่าดูแลต่อ', 'ไม่แน่ใจว่าแท้ไหม อยากให้เซียนช่วยดู ถ้าราคาพอดีก็ให้เช่าเลย', 'เพื่อนบ้านเก่ามอบให้ก่อนย้ายไปต่างจังหวัด'];
@@ -289,6 +321,28 @@ function makeFace(m, spec, cond, seed, res, side, D) {
     const ox = noise(W, H, 16, r), sp = noise(W, H, 70, r);
     for (let i = 0; i < N; i++) { const k = clamp((ox[i] - .6) * 7, 0, 1) * clamp((sp[i] - .45) * 4, 0, 1); if (k > .05) { det[i] = 3; oxA[i] = k; h[i] += .008 * k; } }
   }
+  // มวลสาร: เนื้อผง/ดินวาดเป็นเม็ด/เส้นเล็ก ๆ (เห็นชัดเมื่อส่อง) ตำแหน่งหลักจาก seed ของรุ่น + เล็กน้อยจาก seed ขององค์
+  // ของจริงนูนมีมิติ สีไม่สม่ำเสมอ; ของเทียมแบนและสีเรียบเท่ากันหมด; เหรียญโลหะใช้ผสมสีเข้าเนื้อแทน
+  const ING = ingrList(spec.ingr || ''), ingI = ING.length && !metal ? new Int8Array(N).fill(-1) : null, ingJ = ingI ? new Float32Array(N) : null;
+  if (ingI) {
+    const P0 = inset(outlinePts(m.shape), .86), S1 = Math.max(1, res);
+    ING.forEach((gI, gi) => {
+      const kind = INGR[gI.id].kind, rm = rng(hash(m.id + ':ingr:' + gI.id + side)), rp = rng(seed + hash(gI.id + side));
+      for (let k = 0; k < 300; k++) {
+        const rr = k < 260 ? rm : rp, fx = rr(), fy = rr(), ang = rr() * Math.PI, jr = rr(), sz = rr(), jit = gI.fake ? 1 : .8 + jr * .4;
+        if (!inPoly(fx, fy, P0)) continue;
+        const put = (px, py, a) => { px = Math.round(px); py = Math.round(py); if (px < 0 || py < 0 || px >= W || py >= H) return; const j = py * W + px; if (soft[j] < .6) return; ingI[j] = gi; ingJ[j] = jit; if (!gI.fake) h[j] += .03 * a; };
+        const disc = (cx, cy, rx, ry, an) => { const Rr = Math.ceil(Math.max(rx, ry)), c = Math.cos(an), sn = Math.sin(an); for (let dy = -Rr; dy <= Rr; dy++) for (let dx = -Rr; dx <= Rr; dx++) { const u = (dx * c + dy * sn) / rx, v = (-dx * sn + dy * c) / ry, d = u * u + v * v; if (d <= 1) put(cx + dx, cy + dy, 1 - d * .6); } };
+        const cx = fx * W, cy = fy * H;
+        if (kind === 'hair') { let x0 = cx, y0 = cy, a = ang * 2; for (let t = 0, L = (10 + sz * 8) * S1; t < L; t++) { put(x0, y0, .7); a += (rm() - .5) * .35; x0 += Math.cos(a); y0 += Math.sin(a); } }
+        else if (kind === 'grain') disc(cx, cy, 2.8 * S1, 1.2 * S1, ang);
+        else if (kind === 'metal') disc(cx, cy, (1.8 + sz) * S1, .8 * S1, ang);
+        else if (kind === 'flake') { disc(cx, cy, (1.2 + sz * .8) * S1, 1.1 * S1, ang); disc(cx + 1.4 * S1, cy + .8 * S1, .9 * S1, .9 * S1, 0); }
+        else if (kind === 'shiny') disc(cx, cy, 2 * S1, 2 * S1, 0);
+        else disc(cx, cy, (1.2 + sz * 1.1) * S1, (1.2 + sz * 1.1) * S1, 0);
+      }
+    });
+  }
   const B = boxBlur(h, W, H, Math.max(2, Math.round(10 * res)));
   x.globalCompositeOperation = 'source-over'; x.setTransform(1, 0, 0, 1, 0, 0);
   const img = x.createImageData(W, H), d = img.data;
@@ -304,6 +358,10 @@ function makeFace(m, spec, cond, seed, res, side, D) {
     if (m.gold && h[i] > .25 && hi[i] > .58) col = col.map((c0, q) => lerp(c0, [214, 168, 62][q], .78));
     if (det[i] === 1) col = col.map(c0 => c0 * .55); else if (det[i] === 2) col = col.map(c0 => c0 * .52);
     else if (det[i] === 3) col = col.map((c0, q) => lerp(c0, [226, 222, 206][q], .62 * oxA[i]));
+    if (ingI && ingI[i] >= 0) {
+      const gI = ING[ingI[i]], I = INGR[gI.id], sh = I.kind === 'flake' || I.kind === 'metal' || I.kind === 'shiny' ? .75 + hi[i] * .7 : 1;
+      col = gI.fake ? I.col.slice() : I.col.map((c0, q) => lerp(clamp(c0 * ingJ[i] * sh, 0, 255), col[q], .2));
+    } else if (metal && ING.length) for (const gI of ING) col = col.map((c0, q) => lerp(c0, INGR[gI.id].col[q], gI.fake ? .09 : .2 * low[i] * low[i]));
     d[j] = col[0]; d[j + 1] = col[1]; d[j + 2] = col[2]; d[j + 3] = 255;
     const hl = h[y * W + Math.max(xx - 1, 0)], hr = h[y * W + Math.min(xx + 1, W - 1)], hu = h[Math.max(y - 1, 0) * W + xx], hd = h[Math.min(y + 1, H - 1) * W + xx];
     let ax = (hl - hr) * K, ay = (hd - hu) * K; const L = Math.hypot(ax, ay, 1);
@@ -523,9 +581,11 @@ function snap(key, m, spec, cond, seed, views) {
 }
 function thumbLater(key, args, cb) { if (THUMB.has(key)) { cb(THUMB.get(key)); return; } jobs.push({ key, args, cb }); if (jobs.length === 1) setTimeout(runJobs, 30); }
 function runJobs() { const j = jobs.shift(); if (!j) return; try { j.cb(snap(j.key, ...j.args)); } catch (e) { console.error(e); } if (jobs.length) setTimeout(runJobs, 16); }
+const PVA = new Map();
 function fillThumbs(root) {
   root.querySelectorAll('[data-thumb]').forEach(el => {
     const [kind, id] = el.dataset.thumb.split(':');
+    if (kind === 'pv') { const a = PVA.get(id); if (a) thumbLater('pv:' + id, [a[0], a[1], 100, 4242, ['front', 'back']], urls => { el.querySelectorAll('img').forEach((im, i) => im.src = urls[i]); }); return; }
     if (kind === 'm') { const m = modelById(id); thumbLater('m:' + id, [m, m.spec, 100, 4242, ['front', 'back', 'side']], urls => { el.querySelectorAll('img').forEach((im, i) => im.src = urls[i]); }); }
     else { const it = S.inv.find(i => String(i.id) === id); if (it) thumbLater('i:' + id, [modelById(it.modelId), it.spec, it.cond, it.seed, ['front']], urls => { el.src = urls[0]; }); }
   });
@@ -570,15 +630,27 @@ function sfx(name) { const a = audio(); if (!a || !SFX[name]) return; try { SFX[
 
 /* ================= state ================= */
 const KEY = 'sianphra_v1';
-function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 }, tools: {}, loan: { amt: 0, day: 0 }, shareBan: 0 }; }
+function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 }, tools: {}, loan: { amt: 0, day: 0 }, shareBan: 0, trust: {}, templeBan: {}, recipes: {}, kaka: false }; }
 let S = null; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
 if (!S || S.v !== 1) { S = newGame(); }
 S.stats.spotted = S.stats.spotted || 0; S.tools = S.tools || {};
 S.loan = S.loan || { amt: 0, day: 0 }; S.shareBan = S.shareBan || 0;
+// จัดสร้าง: ความไว้ใจวัด, วัดที่แบน, ตำรับที่พบ, ดินกากยายักษ์ และค่าเริ่มต้นของ batch จากเซฟเก่า (hype 30 heat 0)
+function normTemple() {
+  S.trust = S.trust || {}; for (const t of TEMPLES) if (S.trust[t.id] == null) S.trust[t.id] = 50;
+  S.templeBan = S.templeBan || {}; S.recipes = S.recipes || {}; S.kaka = !!S.kaka;
+  for (const b of S.batches) {
+    const cm = S.custom.find(c => c.id === b.modelId);
+    b.hype ??= 30; b.heat ??= 0; b.keep ??= 0; b.stock ??= 0; b.preorder ??= 0;
+    b.base ??= cm ? cm.price : b.unit * 12; b.mp ??= b.base; b.hist ??= b.open ? [Math.round(b.mp)] : [];
+  }
+}
+normTemple();
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
 const lvl = () => { let l = 1; LEVELS.forEach((L, i) => { if (S.xp >= L.xp) l = i + 1; }); return l; };
 const modelById = id => MODELS.find(m => m.id === id) || S.custom.find(m => m.id === id);
 const allModels = () => MODELS.concat(S.custom.filter(c => c.ready));
+const syncPrice = b => { const cm = modelById(b.modelId); if (cm) cm.price = Math.round(b.mp); };
 const cf = c => .35 + .65 * Math.pow(clamp((c - 60) / 40, 0, 1), 1.4);
 function gainXP(n) { S.xp += Math.max(0, Math.round(n)); }
 
@@ -596,13 +668,14 @@ function mutate(spec, n, r) {
   const s = { ...spec }, ks = Object.keys(s).map(k => [k, r()]).sort((a, b) => a[1] - b[1]).map(a => a[0]).slice(0, n);
   for (const k of ks) {
     const T = TELLS[k];
+    if (T.mut) { s[k] = T.mut(r, s[k]); continue; }
     if (T.num) { let d = (1 + Math.floor(r() * 2)) * (r() < .5 ? -1 : 1) * (k === 'dots' ? 2 : 1); let v = clamp(s[k] + d, T.num[0], T.num[1]); if (v === spec[k]) v = spec[k] + (spec[k] < T.num[1] ? 1 : -1); s[k] = v; }
     else s[k] = pick(r, T.opts.filter(o => o !== s[k]));
   }
   return s;
 }
 function makeCustomer(r, L) {
-  const pool = allModels().filter(m => m.lvl <= L), byLvl = ps => wpick(r, ps.map(p => [p, p.lvl === L ? 3 : p.lvl === L - 1 ? 2 : 1]));
+  const pool = MODELS.filter(m => m.lvl <= L), byLvl = ps => wpick(r, ps.map(p => [p, p.lvl === L ? 3 : p.lvl === L - 1 ? 2 : 1]));
   // 75% เลือกจากรุ่นที่ราคาตลาดไม่เกิน 1.2 เท่าของเงินที่มี (ไม่มีเลย = รุ่นถูกสุด), 25% สุ่มตามเลเวล
   // ใช้เลือกรุ่นอย่างเดียว ราคาที่ขอ (ask) ยังคิดจากราคาตลาดและสภาพเท่านั้น
   let m;
@@ -884,16 +957,16 @@ function endDay() {
     if (b.done) continue; const cm = modelById(b.modelId), t = TEMPLES.find(x => x.id === b.temple);
     if (!b.open) {
       if (S.day + 1 >= b.ready) {
-        b.open = true; cm.ready = true; cm.lvl = Math.min(lvl(), 6);
+        b.open = true; cm.ready = true; cm.lvl = Math.min(lvl(), 6); b.hist = [Math.round(b.mp)]; syncPrice(b);
         S.inv.unshift({ id: S.nextId++, modelId: cm.id, spec: { ...cm.spec }, genuine: true, cond: 100, seed: Math.floor(Math.random() * 1e9), paid: 0, cert: true, pend: 0, award: 0, day: S.day + 1, xp: true });
         lines.push(['gold', `${cm.name} จัดสร้างเสร็จแล้ว! เปิดให้บูชาตั้งแต่วันพรุ่งนี้ และวัดมอบองค์ต้นแบบให้คุณ 1 องค์`]);
       } else lines.push(['', `${cm.name}: กำลังจัดสร้าง อีก ${b.ready - S.day - 1} วัน`]);
       continue;
     }
-    const r = rng(hash(b.id + ':' + S.day)), n = Math.min(b.qty - b.sold, Math.round(b.qty * (.06 + r() * .09) * (.7 + t.fame * .35) * (1 + S.rep / 120)));
+    const r = rng(hash(b.id + ':' + S.day)), n = Math.min(b.qty - b.keep - b.sold, Math.round(b.qty * (.06 + r() * .09) * (.7 + t.fame * .35) * (1 + S.rep / 120)));
     b.sold += n; const rev = n * b.unit; S.money += Math.round(rev * .7); gainXP(n / 15);
     lines.push(['good', `${cm.name}: บูชาออกไป ${n} องค์ รายได้ ${fmt(rev * .7)} (ถวายวัด ${fmt(rev * .3)})`]);
-    if (b.sold >= b.qty) { b.done = true; S.rep = Math.min(100, S.rep + 5); gainXP(100); cm.price = Math.round(cm.price * 1.6); lines.push(['gold', `${cm.name} หมดเกลี้ยง! ชื่อเสียง +5 และราคาสะสมของรุ่นนี้พุ่งขึ้น`]); }
+    if (b.sold >= b.qty - b.keep) { b.done = true; S.rep = Math.min(100, S.rep + 5); gainXP(100); b.base = Math.round(b.base * 1.6); b.mp = Math.round(b.mp * 1.3); syncPrice(b); lines.push(['gold', `${cm.name} หมดเกลี้ยง! ชื่อเสียง +5 และราคาสะสมของรุ่นนี้พุ่งขึ้น`]); }
   }
   for (const it of S.inv.filter(x => x.consign && S.day >= x.consign.until)) {
     S.inv = S.inv.filter(x => x !== it); lines.push(['', `${it.consign.owner}มารับ ${modelById(it.modelId).name} คืน (ฝากขายครบ 5 วันแล้วยังขายไม่ออก)`]);
@@ -1005,7 +1078,7 @@ addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden
 function bookHTML() {
   const L = lvl(), curId = mode === 'own' && ownItem ? ownItem.modelId : mode === 'daily' ? DS[D.run.idx].modelId : S.queue[0]?.modelId;
   const list = MODELS.concat(S.custom).slice().sort((a, b) => (b.id === curId) - (a.id === curId));
-  return `<h2>สมุดองค์ครู</h2><div class="row" style="margin:0 0 8px"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button></div><p class="note">เทียบองค์ที่กำลังส่องกับองค์ครู (ของแท้) ของเก๊จะผิดจากองค์ครูอย่างน้อย 1 จุด หมุนดูทั้งหน้า หลัง และขอบข้าง แล้วใช้ "ส่อง" ดูผิวเนื้อใกล้ ๆ</p>` +
+  return `<h2>สมุดองค์ครู</h2><div class="row" style="margin:0 0 8px"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="recipeBtn">ตำรับที่ค้นพบ</button></div><p class="note">เทียบองค์ที่กำลังส่องกับองค์ครู (ของแท้) ของเก๊จะผิดจากองค์ครูอย่างน้อย 1 จุด หมุนดูทั้งหน้า หลัง และขอบข้าง แล้วใช้ "ส่อง" ดูผิวเนื้อใกล้ ๆ</p>` +
     list.map(m => {
       if (m.lvl > L && !m.custom && m.id !== curId) return `<div class="mdl"><b>${esc(m.name)}</b> <span class="badge">ปลดล็อก Lv.${m.lvl}</span></div>`;
       return `<div class="mdl ${m.id === curId ? 'cur' : ''}"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font:600 18px Kanit,sans-serif">${esc(m.name)}</b>${m.id === curId ? '<span class="badge gold">กำลังส่ององค์นี้</span>' : ''}</div>
@@ -1043,7 +1116,7 @@ function runContest(ids) {
     if (!it.genuine) { S.rep = Math.max(0, S.rep - 8); it.cert = false; it.xp = true; return ['bad', `${m.name}: ถูกคัดออก กรรมการตัดสินว่าไม่แท้ (ชื่อเสียง −8)${shareFake(it)}`]; }
     const pk = it.share ? .5 : 1, ps = it.share ? ' (แบ่งเพื่อนครึ่งหนึ่ง)' : '';
     const sc = it.cond + Math.min(m.lvl, 6) * 4 + (it.cert ? 4 : 0) + Math.random() * 14;
-    if (sc >= 112) { S.money += Math.round(m.price * .15 * pk); gainXP(120); S.rep = Math.min(100, S.rep + 6); it.award = Math.max(it.award, 3); return ['gold', `${m.name}: ชนะเลิศ! เงินรางวัล ${fmt(m.price * .15 * pk)}${ps} +120 XP ชื่อเสียง +6`]; }
+    if (sc >= 112) { S.money += Math.round(m.price * .15 * pk); gainXP(120); S.rep = Math.min(100, S.rep + 6); it.award = Math.max(it.award, 3); const kk = !S.kaka; S.kaka = true; return ['gold', `${m.name}: ชนะเลิศ! เงินรางวัล ${fmt(m.price * .15 * pk)}${ps} +120 XP ชื่อเสียง +6${kk ? ' • ได้รับมวลสาร "ดินกากยายักษ์" ใช้จัดสร้างพระได้แล้ว' : ''}`]; }
     if (sc >= 102) { S.money += Math.round(m.price * .06 * pk); gainXP(70); S.rep = Math.min(100, S.rep + 3); it.award = Math.max(it.award, 2); return ['good', `${m.name}: รองชนะเลิศอันดับ 1 เงินรางวัล ${fmt(m.price * .06 * pk)}${ps} +70 XP`]; }
     if (sc >= 94) { gainXP(40); S.rep = Math.min(100, S.rep + 1); it.award = Math.max(it.award, 1); return ['good', `${m.name}: รองชนะเลิศอันดับ 2 +40 XP`]; }
     gainXP(10); return ['', `${m.name}: ไม่ติดรางวัล (+10 XP)`];
@@ -1051,42 +1124,144 @@ function runContest(ids) {
   openModal(`<h2>ผลการประกวด</h2><ul class="log">${res.map(([k, t]) => `<li class="${k}">${esc(t)}</li>`).join('')}</ul>${levelHTML()}<p class="note">องค์ที่ติดรางวัลจะปล่อยเช่าได้ราคาสูงขึ้น</p><div class="row"><button class="btn ok" data-close>ตกลง</button></div>`);
   render();
 }
-const TF = { temple: 'pa', shape: 'rect', mat: 'powder', hand: 'samadhi', flame: 'tall', back: 'circle', qty: 1000 };
-function templeCost() { const t = TEMPLES.find(x => x.id === TF.temple); return { cost: Math.round(TF.qty * UNIT[TF.mat] * (.8 + .4 * t.fame) + 20000), unit: Math.round(UNIT[TF.mat] * 6 * t.fame * (1 + S.rep / 150)) }; }
-function templeHTML() {
-  const L = lvl();
-  if (L < 5) return `<h2>จัดสร้างพระกับวัด</h2><p>ปลดล็อกที่ Lv.5 เซียนใหญ่ (XP ตอนนี้ ${S.xp}/${LEVELS[4].xp})</p><p class="note">เมื่อปลดล็อก คุณจะออกแบบพิมพ์ เนื้อพระ และจำนวนเอง ร่วมกับวัดที่ชื่อเสียงของคุณเข้าถึงได้ รายได้ 30% ถวายบำรุงวัด</p>`;
-  if (TF.shape === 'oval' && !['copper', 'silver'].includes(TF.mat)) TF.mat = 'copper';
-  if (TF.shape !== 'oval' && !['clay', 'powder'].includes(TF.mat)) TF.mat = 'powder';
-  const sel = (k, opts) => `<select data-tf="${k}">${opts.map(([v, n, dis]) => `<option value="${v}" ${String(TF[k]) === String(v) ? 'selected' : ''} ${dis ? 'disabled' : ''}>${esc(n)}</option>`).join('')}</select>`;
-  const { cost, unit } = templeCost();
-  const batches = S.batches.map(b => { const cm = modelById(b.modelId); return `<li class="${b.done ? 'gold' : b.open ? 'good' : ''}">${esc(cm.name)}: ${b.done ? 'หมดแล้ว' : b.open ? `เปิดให้บูชา ${b.sold}/${b.qty} องค์` : `กำลังจัดสร้าง เสร็จวันที่ ${b.ready}`}</li>`; }).join('');
-  return `<h2>จัดสร้างพระกับวัด</h2><div class="form">
-    <label>วัด${sel('temple', TEMPLES.map(t => [t.id, `${t.name}${S.rep < t.rep ? ` (ต้องมีชื่อเสียง ${t.rep})` : ''}`, S.rep < t.rep]))}</label>
-    <label>พิมพ์${sel('shape', Object.entries(PIMS))}</label>
-    <label>เนื้อพระ${sel('mat', (TF.shape === 'oval' ? ['copper', 'silver'] : ['powder', 'clay']).map(k => [k, MATS[k].name]))}</label>
-    <label>ปางพระหัตถ์${sel('hand', TELLS.hand.opts.map(v => [v, tellTxt('hand', v).split(':')[0]]))}</label>
-    <label>พระเกศ${sel('flame', TELLS.flame.opts.map(v => [v, tellTxt('flame', v)]))}</label>
-    <label>ด้านหลัง${sel('back', TELLS.back.opts.map(v => [v, tellTxt('back', v)]))}</label>
-    <label>จำนวนสร้าง${sel('qty', [[300, '300 องค์'], [1000, '1,000 องค์'], [3000, '3,000 องค์']])}</label>
-    <label>ค่าบูชาต่อองค์<span class="big">${fmt(unit)}</span></label></div>
-    <p>ค่าจัดสร้างรวมพิธีพุทธาภิเษก <b class="big">${fmt(cost)}</b> • ใช้เวลา 3 วัน</p>
-    <div class="row"><button class="btn ok" id="makeB" ${S.money < cost ? 'disabled' : ''}>สั่งจัดสร้าง</button></div>
-    ${batches ? `<h3>รุ่นที่จัดสร้าง</h3><ul class="log">${batches}</ul>` : ''}`;
+/* ===== จัดสร้างพระ: ออกแบบรุ่น (วัดและพิมพ์ → มวลสาร → ชื่อรุ่น → จำนวน/สต็อก → สรุป) ===== */
+const TF = { view: '', step: 1, temple: 'pa', shape: 'rect', mat: 'powder', hand: 'samadhi', flame: 'tall', back: 'circle', ing: {}, nick: '', qty: 1000, keep: 0, seq: '' };
+const tTrust = id => S.trust[id] ?? 50;
+const templeOK = t => S.rep < t.rep ? `ต้องมีชื่อเสียง ${t.rep}` : (S.templeBan[t.id] || 0) > S.day ? `ไม่รับจัดสร้างถึงวันที่ ${S.templeBan[t.id]}` : tTrust(t.id) < 10 ? 'เจ้าอาวาสไม่ไว้ใจ ไม่รับจัดสร้าง' : '';
+const maxIngr = () => tTrust(TF.temple) >= 70 ? 5 : 3;
+function ingLock(id) { const I = INGR[id]; return I.lvl && lvl() < I.lvl ? `ปลดล็อก Lv.${I.lvl}` : I.trust && tTrust(TF.temple) < I.trust ? `ต้องมีความไว้ใจวัด ${I.trust} ขึ้นไป` : I.award && !S.kaka ? 'ได้จากรางวัลชนะเลิศงานประกวดเท่านั้น' : ''; }
+const pickedIng = () => Object.entries(TF.ing).filter(([id]) => INGR[id] && !ingLock(id)).slice(0, maxIngr()).map(([id, f]) => ({ id, fake: f === 'fake' }));
+const fullName = (nick, t, shape) => `${PIMS[shape]} รุ่น${nick} ${t.name}`;
+const tObj = id => TEMPLES.find(x => x.id === id);
+function nickErr(raw) {
+  const n = raw.trim();
+  if (n.length < 2 || n.length > 30) return 'ชื่อรุ่นต้องยาว 2–30 ตัวอักษร';
+  if (S.custom.some(c => c.nick === n || c.name === fullName(n, tObj(c.temple) || tObj(TF.temple), c.shape))) return 'ชื่อรุ่นนี้ใช้ไปแล้ว ตั้งชื่อใหม่นะ';
+  return '';
 }
-function makeBatch() {
-  const t = TEMPLES.find(x => x.id === TF.temple); if (S.rep < t.rep) return;
-  const { cost, unit } = templeCost(); if (S.money < cost) { toast('เงินไม่พอ', 'bad'); return; }
-  S.money -= cost;
-  const id = 'c' + S.nextId++, n = S.custom.filter(c => c.temple === t.id).length + 1;
+function designSpec() {
   const spec = { hand: TF.hand, flame: TF.flame, back: TF.back };
   if (TF.shape === 'rect') spec.tiers = 3; if (TF.shape === 'arch' || TF.shape === 'oval') spec.petals = 7; if (TF.shape === 'arch') spec.dots = 13;
   if (TF.shape === 'oval') spec.loop = 'weld'; else { spec.edge = 'cut'; spec.thick = 'mid'; spec.grain = TF.mat === 'powder' ? 'crackle' : 'pores'; }
-  S.custom.push({ id, custom: true, ready: false, temple: t.id, name: `${PIMS[TF.shape]} รุ่น${n === 1 ? 'แรก' : ' ' + n} ${t.name}`, shape: TF.shape, mat: TF.mat, lvl: 99, price: unit * 12, spec });
-  S.batches.push({ id, modelId: id, temple: t.id, qty: +TF.qty, sold: 0, unit, ready: S.day + 3, open: false, done: false });
-  gainXP(50); toast('สั่งจัดสร้างแล้ว วัดจะทำพิธีและแจ้งเมื่อพร้อมให้บูชา', 'good');
-  openModal(templeHTML()); render();
+  const ig = ingrKey(pickedIng()); if (ig) spec.ingr = ig;
+  return spec;
 }
+function templeCost() {
+  const t = tObj(TF.temple), ings = pickedIng();
+  const ingCost = ings.reduce((a, g) => a + INGR[g.id].cost * (g.fake ? .2 : 1), 0), claimed = ings.reduce((a, g) => a + INGR[g.id].cost, 0);
+  const mat = Math.round(TF.qty * UNIT[TF.mat] * (.8 + .4 * t.fame)), ing = Math.round(TF.qty * ingCost * (.8 + .4 * t.fame));
+  return { t, mat, ing, rite: 20000, cost: mat + ing + 20000, unit: Math.round((UNIT[TF.mat] + claimed) * 6 * t.fame * (1 + S.rep / 150)), keepN: Math.round(TF.qty * TF.keep / 100) };
+}
+// ค่าที่โชว์ผู้เล่น (vis) ไม่รวมโบนัสลับ: ชื่อมงคล +5 และตำรับลับ
+function designStats() {
+  const t = tObj(TF.temple), ings = pickedIng(), nick = TF.nick.trim();
+  const recs = RECIPES.filter(R => R.need.every(id => ings.some(g => g.id === id && !g.fake)));
+  const vis = Math.round(t.fame * 15 + ings.reduce((a, g) => a + INGR[g.id].hype, 0)), visPct = ings.reduce((a, g) => a + INGR[g.id].price, 0);
+  let hype = vis + (LUCKY.some(w => nick.includes(w)) ? 5 : 0) + recs.reduce((a, R) => a + R.hype, 0);
+  if (TF.seq) hype = Math.max(40, hype);
+  return { recs, vis, visPct, hype: clamp(hype, 0, 100), pricePct: visPct + recs.reduce((a, R) => a + R.price, 0), heat: ings.filter(g => g.fake).length * 10 };
+}
+function wizHTML() {
+  if (TF.shape === 'oval' && !['copper', 'silver'].includes(TF.mat)) TF.mat = 'copper';
+  if (TF.shape !== 'oval' && !['clay', 'powder'].includes(TF.mat)) TF.mat = 'powder';
+  if (templeOK(tObj(TF.temple))) { const ok = TEMPLES.find(t => !templeOK(t)); if (ok) TF.temple = ok.id; }
+  const sel = (k, opts) => `<select data-tf="${k}">${opts.map(([v, n, dis]) => `<option value="${esc(v)}" ${String(TF[k]) === String(v) ? 'selected' : ''} ${dis ? 'disabled' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  const c = templeCost(), st = designStats(), spec = designSpec(), pid = 'c' + S.nextId, nick = TF.nick.trim();
+  const pm = { id: pid, shape: TF.shape, mat: TF.mat, spec }, pk = String(hash(JSON.stringify(pm)));
+  PVA.set(pk, [pm, spec]);
+  const name = nick ? fullName(nick, c.t, TF.shape) : `${PIMS[TF.shape]} รุ่น… ${c.t.name}`;
+  const seqs = S.batches.filter(b => b.seqOK && !b.seqUsed);
+  const steps = ['วัดและพิมพ์', 'มวลสาร', 'ชื่อรุ่น', 'จำนวน', 'สรุปต้นทุน'];
+  const ings = pickedIng(), nI = ings.length, why = templeOK(c.t) || nickErr(TF.nick) || (S.money < c.cost ? `เงินไม่พอ (ขาด ${fmt(c.cost - S.money)})` : '');
+  const step = (n, body) => `<section class="step ${TF.step === n ? 'on' : ''}"><h3>${n}. ${steps[n - 1]}</h3>${body}</section>`;
+  return `<div class="wiz"><div class="stps">${steps.map((n, i) => `<button class="stp ${TF.step === i + 1 ? 'on' : ''}" data-step="${i + 1}" aria-label="ขั้นที่ ${i + 1} ${n}">${i + 1}</button>`).join('')}<span class="stpn">${steps[TF.step - 1]}</span></div>
+    <div class="pvw"><div class="views pv" data-thumb="pv:${pk}"><figure><img alt="ตัวอย่างด้านหน้า"><figcaption>ด้านหน้า</figcaption></figure><figure><img alt="ตัวอย่างด้านหลัง"><figcaption>ด้านหลัง</figcaption></figure></div><div class="pvn" id="pvName">${esc(name)}</div></div>` +
+    step(1, `<div class="form">
+      ${seqs.length ? `<label class="span2f">ต่อยอดเป็นรุ่นสอง${sel('seq', [['', 'ไม่ใช่ (รุ่นใหม่)']].concat(seqs.map(b => [b.id, modelById(b.modelId).name])))}</label>` : ''}
+      <label>วัด${sel('temple', TEMPLES.map(t => [t.id, `${t.name} • ไว้ใจ ${tTrust(t.id)}${templeOK(t) ? ` (${templeOK(t)})` : ''}`, !!templeOK(t) || (TF.seq && t.id !== S.batches.find(b => b.id === TF.seq)?.temple)]))}</label>
+      <label>พิมพ์${sel('shape', Object.entries(PIMS))}</label>
+      <label>เนื้อพระ${sel('mat', (TF.shape === 'oval' ? ['copper', 'silver'] : ['powder', 'clay']).map(k => [k, MATS[k].name]))}</label>
+      <label>ปางพระหัตถ์${sel('hand', TELLS.hand.opts.map(v => [v, tellTxt('hand', v).split(':')[0]]))}</label>
+      <label>พระเกศ${sel('flame', TELLS.flame.opts.map(v => [v, tellTxt('flame', v)]))}</label>
+      <label>ด้านหลัง${sel('back', TELLS.back.opts.map(v => [v, tellTxt('back', v)]))}</label></div>`) +
+    step(2, `<p class="note">เลือกได้ ${nI}/${maxIngr()} อย่าง${maxIngr() < 5 ? ' (ถ้าวัดไว้ใจ 70 ขึ้นไป เลือกได้ 5 อย่าง)' : ''} • มวลสารจะเห็นเป็นเม็ดหรือเส้นเล็ก ๆ เมื่อ "ส่อง"${TF.mat === 'copper' || TF.mat === 'silver' ? ' (เหรียญโลหะ: มวลสารผสมเข้าไปในเนื้อ เปลี่ยนสีโลหะแทน)' : ''}</p><div class="ingl">` +
+      Object.entries(INGR).map(([id, I]) => { const lk = ingLock(id), on = !!TF.ing[id] && !lk, fx = [I.hype ? `กระแส +${I.hype}` : '', I.price ? `ราคาสะสม +${Math.round(I.price * 100)}%` : ''].filter(Boolean).join(' • ');
+        return `<div class="ing ${lk ? 'lock' : ''} ${on ? 'on' : ''}"><label class="ingc"><input type="checkbox" data-ing="${id}" ${on ? 'checked' : ''} ${lk ? 'disabled' : ''}><span><b>${esc(I.name)}</b><small>${esc(I.look)} • ${fmt(I.cost)}/องค์${fx ? ' • ' + fx : ''}${lk ? ' • ' + esc(lk) : ''}</small></span></label>
+          ${on ? `<label class="fake"><input type="checkbox" data-ingf="${id}" ${TF.ing[id] === 'fake' ? 'checked' : ''}> ใช้ของเทียม (ต้นทุน 20%)</label>` : ''}</div>`; }).join('') +
+      `</div>${ings.some(g => g.fake) ? '<p class="note warn">ของเทียมถูกกว่า แต่ส่องใกล้ ๆ จะดูแบนและสีเรียบผิดธรรมชาติ ถ้าโดนแฉจะเป็นข่าวใหญ่ และวัดจะไว้ใจน้อยลง</p>' : ''}`) +
+    step(3, `<label class="nick">ชื่อรุ่น<span class="nrow"><input id="nick" type="text" maxlength="30" autocomplete="off" placeholder="เช่น รวยทันใจ" value="${esc(TF.nick)}"><button class="btn dice" id="diceBtn" aria-label="สุ่มชื่อรุ่น">🎲</button></span></label>
+      <p class="err" id="nickErr">${TF.nick ? esc(nickErr(TF.nick)) : ''}</p><p class="note">ชื่อเต็ม: "${esc(PIMS[TF.shape])} รุ่น<ชื่อที่ตั้ง> ${esc(c.t.name)}" • ห้ามใช้ชื่อพระเกจิหรือวัดจริง</p>`) +
+    step(4, `<div class="form"><label>จำนวนสร้าง${sel('qty', [[300, '300 องค์'], [1000, '1,000 องค์'], [3000, '3,000 องค์']])}</label>
+      <label>เก็บไว้ขายเอง${sel('keep', [0, 2, 5, 10].map(v => [v, v ? `${v}% (${Math.round(TF.qty * v / 100)} องค์)` : 'ไม่เก็บ']))}</label></div>
+      <p class="note">สต็อกที่เก็บไว้จะขายได้ตามราคาสะสมของรุ่นในวันนั้น ส่วนที่เหลือวัดเปิดให้บูชาที่ ${fmt(c.unit)} ต่อองค์ (ถวายวัด 30%)</p>`) +
+    step(5, `<table class="tells"><tr><td>รุ่น</td><td id="sumName">${esc(name)}</td></tr>
+      <tr><td>เนื้อพระ ${TF.qty.toLocaleString()} องค์</td><td>${fmt(c.mat)}</td></tr><tr><td>มวลสาร</td><td>${nI ? `${fmt(c.ing)} (${esc(ingrTxt(ingrKey(ings)))})` : 'ไม่ใส่'}</td></tr>
+      <tr><td>พิธีพุทธาภิเษก</td><td>${fmt(c.rite)}</td></tr><tr><td><b>รวม</b></td><td><b class="big">${fmt(c.cost)}</b></td></tr>
+      <tr><td>ค่าบูชาที่วัด</td><td>${fmt(c.unit)} ต่อองค์</td></tr><tr><td>ราคาสะสมตั้งต้น</td><td>ราว ${fmt(c.unit * 12 * (1 + st.visPct))}</td></tr>
+      <tr><td>กระแสเริ่มต้น</td><td>ราว ${st.vis}${TF.seq ? ' (รุ่นสองเริ่มอย่างน้อย 40 และมียอดจองล่วงหน้า)' : ''}</td></tr>${st.heat ? `<tr><td>ความร้อน (heat)</td><td class="warn">${st.heat}</td></tr>` : ''}
+      <tr><td>เก็บขายเอง</td><td>${c.keepN} องค์</td></tr><tr><td>ใช้เวลา</td><td>3 วัน</td></tr></table>
+      <p class="err" id="makeErr">${esc(why)}</p><div class="row"><button class="btn ok" id="makeB" ${why ? 'disabled' : ''}>สั่งจัดสร้าง</button></div>`) +
+    `<div class="row stepnav"><button class="btn dim" data-step="${Math.max(1, TF.step - 1)}" ${TF.step === 1 ? 'disabled' : ''}>ก่อนหน้า</button><button class="btn" data-step="${Math.min(5, TF.step + 1)}" ${TF.step === 5 ? 'disabled' : ''}>ถัดไป</button></div></div>`;
+}
+function onNick(v) {
+  TF.nick = v; const e = nickErr(v), nick = v.trim(), t = tObj(TF.temple), name = nick ? fullName(nick, t, TF.shape) : `${PIMS[TF.shape]} รุ่น… ${t.name}`;
+  const ne = $('#nickErr'); if (ne) ne.textContent = v ? e : '';
+  for (const id of ['#pvName', '#sumName']) { const el = $(id); if (el) el.textContent = name; }
+  const mb = $('#makeB'), me = $('#makeErr'), c = templeCost(), why = templeOK(t) || e || (S.money < c.cost ? `เงินไม่พอ (ขาด ${fmt(c.cost - S.money)})` : '');
+  if (mb) mb.disabled = !!why; if (me) me.textContent = why;
+}
+function randomNick() { for (let i = 0; i < 40; i++) { const n = pick(Math.random, NAME_A) + pick(Math.random, NAME_B); if (!nickErr(n)) return n; } return pick(Math.random, NAME_A) + pick(Math.random, NAME_B) + (S.custom.length + 1); }
+function setSeq(id) {
+  TF.seq = id; const b = S.batches.find(x => x.id === id); if (!b) return;
+  const cm = modelById(b.modelId); Object.assign(TF, { temple: b.temple, shape: cm.shape, mat: cm.mat, hand: cm.spec.hand, flame: cm.spec.flame, back: cm.spec.back, ing: {} });
+  for (const g of ingrList(cm.spec.ingr)) TF.ing[g.id] = g.fake ? 'fake' : 'real';
+  if (!TF.nick) TF.nick = randomNickFrom(cm);
+}
+const randomNickFrom = cm => { const base = (cm.nick || 'ใหม่') + ' 2'; return nickErr(base) ? randomNick() : base; };
+function templeHTML() {
+  const L = lvl();
+  if (L < 5) return `<h2>จัดสร้างพระกับวัด</h2><p>ปลดล็อกที่ Lv.5 เซียนใหญ่ (XP ตอนนี้ ${S.xp}/${LEVELS[4].xp})</p><p class="note">เมื่อปลดล็อก คุณจะออกแบบพิมพ์ มวลสาร ตั้งชื่อรุ่น และจำนวนเอง ร่วมกับวัดที่ไว้ใจคุณ รายได้ 30% ถวายบำรุงวัด</p>`;
+  const wiz = TF.view === 'wiz' || !S.batches.length;
+  return `<h2>จัดสร้างพระกับวัด</h2><div class="row tnav">${wiz ? (S.batches.length ? '<button class="btn dim" id="tList">← รุ่นที่จัดสร้างแล้ว</button>' : '') : '<button class="btn ok" id="tWiz">+ ออกแบบรุ่นใหม่</button>'}</div>` +
+    (wiz ? wizHTML() : batchListHTML());
+}
+function batchListHTML() {
+  return `<p class="note">ความไว้ใจของวัด: ${TEMPLES.map(t => `${esc(t.name)} <b>${tTrust(t.id)}</b>`).join(' • ')}</p>` +
+    S.batches.slice().reverse().map(batchCard).join('');
+}
+function batchCard(b) {
+  const cm = modelById(b.modelId), avail = b.qty - b.keep;
+  const stat = b.done ? '<span class="badge gold">บูชาหมดแล้ว</span>' : b.open ? `<span class="badge good">เปิดให้บูชา ${b.sold}/${avail}</span>` : `<span class="badge">กำลังจัดสร้าง เสร็จวันที่ ${b.ready}</span>`;
+  const stock = b.open && b.stock ? `<div class="row bst"><span>สต็อกเก็บเอง <b>${b.stock}</b> องค์ • ราคาตลาด ${fmt(b.mp)}</span>${[1, 10].filter(n => n <= b.stock).map(n => `<button class="btn" data-stock="${b.id}:${n}">ขาย ${n}</button>`).join('')}<button class="btn ok" data-stock="${b.id}:${b.stock}">ขายหมด ${fmt(b.stock * Math.round(b.mp))}</button></div>` : b.stock ? `<p class="note">สต็อกเก็บเอง ${b.stock} องค์ (ได้รับเมื่อสร้างเสร็จ)</p>` : '';
+  return `<div class="mdl bcard"><div class="bh"><b>${esc(cm.name)}</b>${stat}</div><div class="note">${esc(tObj(b.temple)?.name || '')} • ${esc(MATS[cm.mat].name)} • มวลสาร: ${esc(ingrTxt(cm.spec.ingr || ''))}</div>${stock}</div>`;
+}
+function sellStock(id, n) {
+  const b = S.batches.find(x => x.id === id); n = Math.min(+n, b ? b.stock : 0); if (!b || !b.open || n <= 0) return;
+  const p = Math.round(b.mp), cm = modelById(b.modelId); S.money += n * p; b.stock -= n; b.mp = Math.round(b.mp * Math.max(.85, 1 - .004 * n)); syncPrice(b);
+  toast(`ขาย ${cm.name} จากสต็อก ${n} องค์ ได้ ${fmt(n * p)}`, 'good'); reModal(templeHTML()); render();
+}
+function makeBatch() {
+  const c = templeCost(), t = c.t, why = templeOK(t) || nickErr(TF.nick) || (S.money < c.cost ? 'เงินไม่พอ' : ''); if (why) { toast(why, 'bad'); return; }
+  const st = designStats(), ings = pickedIng(), nick = TF.nick.trim(), id = 'c' + S.nextId++, spec = designSpec();
+  const seqB = TF.seq ? S.batches.find(b => b.id === TF.seq) : null; if (seqB) seqB.seqUsed = true;
+  const base = Math.round(c.unit * 12 * (1 + st.pricePct));
+  S.money -= c.cost;
+  S.custom.push({ id, custom: true, ready: false, temple: t.id, nick, name: fullName(nick, t, TF.shape), shape: TF.shape, mat: TF.mat, lvl: 99, price: base, spec });
+  S.batches.push({ id, modelId: id, temple: t.id, qty: +TF.qty, sold: 0, keep: c.keepN, stock: c.keepN, unit: c.unit, ready: S.day + 3, open: false, done: false,
+    hype: st.hype, heat: st.heat, base, mp: Math.round(base * (.5 + st.hype / 80)), hist: [], preorder: seqB ? Math.round((TF.qty - c.keepN) * .15) : 0, seq: !!seqB });
+  const nf = ings.filter(g => g.fake).length; if (nf) S.trust[t.id] = clamp(tTrust(t.id) - 8 * nf, 0, 100);
+  const found = st.recs.filter(R => !S.recipes[R.id]); for (const R of st.recs) S.recipes[R.id] = true;
+  gainXP(50); Object.assign(TF, { nick: '', step: 1, seq: '', view: '' });
+  if (found.length) { sfx('level'); openModal(`<div class="announce"><p class="big">✨ ค้นพบตำรับลับ! ✨</p>${found.map(R => `<h2>${esc(R.name)}</h2><p>${esc(R.need.map(i => INGR[i].name).join(' + '))}</p><p class="good">${esc(R.txt)}</p>`).join('')}<p class="note">บันทึกไว้ในสมุดหน้า "ตำรับที่ค้นพบ" แล้ว</p><div class="row"><button class="btn ok" id="tBack">ไปดูรุ่นที่จัดสร้าง</button></div></div>`); }
+  else { toast('สั่งจัดสร้างแล้ว วัดจะทำพิธีและแจ้งเมื่อพร้อมให้บูชา', 'good'); openModal(templeHTML()); }
+  render();
+}
+function recipeHTML() {
+  return `<h2>ตำรับที่ค้นพบ</h2><p class="note">ตำรับลับเกิดจากการผสมมวลสารของจริงบางอย่างเข้าด้วยกันตอนจัดสร้าง ลองหาดูเอง</p>` +
+    RECIPES.map(R => S.recipes[R.id] ? `<div class="mdl"><b style="font:600 18px Kanit,sans-serif">${esc(R.name)}</b><p>${esc(R.need.map(i => INGR[i].name).join(' + '))}</p><p class="note">${esc(R.txt)}</p></div>` : `<div class="mdl"><b style="font:600 18px Kanit,sans-serif">???</b><p class="note">ยังไม่ค้นพบ</p></div>`).join('') +
+    `<div class="row"><button class="btn dim" id="bookBack">กลับไปสมุด</button></div>`;
+}
+function reModal(html) { const sh = $('#modal .sheet'), y = sh.scrollTop; openModal(html); sh.scrollTop = y; }
 function toolShopHTML() {
   const L = lvl();
   return `<h2>ร้านอุปกรณ์เซียน</h2><p class="note">ตั้งแต่ Lv.3 จะเริ่มเจอ "เก๊เทพ" ที่หน้าตาเหมือนองค์ครูทุกจุด ต้องใช้ไฟ UV หรือตาชั่งถึงจะจับได้</p>` +
@@ -1141,16 +1316,26 @@ $('#mbody').addEventListener('click', e => {
   if (e.target.id === 'shareBtn') { shareDaily(); return; }
   if (e.target.id === 'enterC') runContest([...$('#mbody').querySelectorAll('.pick input:checked')].map(i => i.value));
   if (e.target.id === 'makeB') makeBatch();
+  const stp = e.target.closest('[data-step]'); if (stp && !stp.disabled) { TF.step = +stp.dataset.step; reModal(templeHTML()); return; }
+  if (e.target.id === 'diceBtn') { const n = randomNick(); const inp = $('#nick'); if (inp) inp.value = n; onNick(n); return; }
+  if (e.target.id === 'tWiz') { TF.view = 'wiz'; openModal(templeHTML()); return; }
+  if (e.target.id === 'tList' || e.target.id === 'tBack') { TF.view = ''; openModal(templeHTML()); return; }
+  const skb = e.target.closest('[data-stock]'); if (skb) { const [bid, n] = skb.dataset.stock.split(':'); sellStock(bid, n); return; }
+  if (e.target.id === 'recipeBtn') { openModal(recipeHTML()); return; }
+  if (e.target.id === 'bookBack') { openModal(bookHTML()); return; }
   if (e.target.id === 'howBtn') openModal(HOW);
   if (e.target.id === 'soundBtn') { S.mute = !S.mute; save(); openModal(menuHTML()); sfx('buy'); }
   if (e.target.id === 'resetBtn') openModal(`<h2>เริ่มเกมใหม่?</h2><p>เงิน เลเวล และพระในตู้ทั้งหมดจะหายไป</p><div class="row"><button class="btn dim" data-close>ยกเลิก</button><button class="btn no" id="resetYes">ยืนยัน เริ่มใหม่</button></div>`);
-  if (e.target.id === 'resetYes') { const mute = S.mute; S = newGame(); S.mute = mute; genQueue(); mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
+  if (e.target.id === 'resetYes') { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); genQueue(); mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
 });
 $('#mbody').addEventListener('change', e => {
-  const k = e.target.dataset.tf; if (k) { TF[k] = k === 'qty' ? +e.target.value : e.target.value; openModal(templeHTML()); }
+  const k = e.target.dataset.tf; if (k) { if (k === 'seq') setSeq(e.target.value); else TF[k] = k === 'qty' || k === 'keep' ? +e.target.value : e.target.value; if (k === 'seq' && !e.target.value) TF.seq = ''; reModal(templeHTML()); }
+  const ig = e.target.dataset.ing; if (ig) { if (e.target.checked) { if (pickedIng().length >= maxIngr()) { toast(`เลือกมวลสารได้สูงสุด ${maxIngr()} อย่าง`, 'bad'); } else TF.ing[ig] = 'real'; } else { const { [ig]: _, ...rest } = TF.ing; TF.ing = rest; } reModal(templeHTML()); }
+  const igf = e.target.dataset.ingf; if (igf) { TF.ing[igf] = e.target.checked ? 'fake' : 'real'; reModal(templeHTML()); }
   if (e.target.matches('.pick input')) { const on = $('#mbody').querySelectorAll('.pick input:checked'); if (on.length > 3) { e.target.checked = false; toast('ส่งได้สูงสุด 3 องค์', 'bad'); } }
 });
 $('#menuBtn').onclick = () => openModal(menuHTML());
+$('#mbody').addEventListener('input', e => { if (e.target.id === 'nick') onNick(e.target.value); });
 $('#spotbar').addEventListener('click', e => {
   if (e.target.id === 'spotSkip' && spotting() && !spot.busy) finishPass(S.queue[0]);
   if (e.target.id === 'spotList' && spotting() && !spot.busy) openModal(spotListHTML());
