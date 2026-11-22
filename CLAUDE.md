@@ -5,7 +5,7 @@
 
 ## Tech
 - HTML/CSS/JS ล้วน ไม่มี build step — `index.html` + ES module หลายไฟล์ + `three.module.min.js` (three.js r170, local copy)
-- โมดูล: `util.js` (ฟังก์ชันพื้นฐาน) → `data.js` (ข้อมูลเกมทั้งหมด) → `amulet2d.js` (วาด heightmap/texture) → `amulet3d.js` (สร้าง mesh, เครื่องราง 3D, กรอบ) → `game.js` (state, UI, ระบบเกม) — import แบบระบุชื่อ, ห้าม import ย้อนทาง (โมดูลล่างไม่รู้จัก `S`)
+- โมดูล: `util.js` (ฟังก์ชันพื้นฐาน) → `data.js` (ข้อมูลเกมทั้งหมด) → `amulet2d.js` (วาด heightmap/texture) → `amulet3d.js` (สร้าง mesh, เครื่องราง 3D, กรอบ) → `endgame.js` (เป้าหมายหลัง Lv.6) → `game.js` (state, UI, ระบบเกม) — import แบบระบุชื่อ, ห้าม import ย้อนทาง (โมดูลล่างไม่รู้จัก `S`); `endgame.js` รับ state/ฟังก์ชันจาก `game.js` ผ่าน `initEndgame(api)` (wrapper แบบเรียกทีหลัง เรียกต่อจาก `normEndgame(S)`)
 - Deploy: GitHub Pages ผ่าน `.github/workflows/pages.yml` (push เข้า `main` แล้ว deploy อัตโนมัติ) — workflow คัดลอก `index.html` และ `*.js` ทั้งหมด ถ้าเพิ่มไฟล์ชนิดอื่น (รูป เสียง) ต้องเพิ่มในขั้น `cp`
 - รันด้วย static server ใดก็ได้ เช่น `npx serve .` หรือ `python3 -m http.server 8000` (เปิดไฟล์ตรง ๆ ด้วย file:// ไม่ได้ เพราะ ES module)
 - เซฟเกมใน `localStorage` key `sianphra_v1` (ครอบ try/catch ไว้); โหมดส่องพระประจำวันเซฟแยกที่ `sianphra_daily_v1`
@@ -24,13 +24,14 @@
 9.3 **guide** — ชิปบน stage: ถอด/ใส่กรอบ (`toggleFrame`), เขย่า (`shakePiece` → เสียง `ring`/`dull`/`merc`/`dry`),  `curPiece()`, เช็กลิสต์ `CL` (ล้างใน `loadStage`, ✗ ≤ 2 ข้อแล้วกดไม่เอา = `commitSpot`), ถามอาจารย์ `askTeacher` (`S.ask`, คำตอบเก็บใน `piece.teach`), เฉลยพร้อมภาพ `revealCard` (thumb kind `x` ผ่าน `XA`), บทเรียน `tutCustomers` / `TUT` / `checkTut` (`S.tut`, ลูกค้า `c.tut` 1–3)
 9.5 **daily** — ส่องพระประจำวัน: `dailySet(date)` seed จาก `hash('daily:'+วันที่เวลาไทย)`, โหมด `daily` บน stage เดิม, จับเวลา, streak, คัดลอกผลแชร์
 9.7 **จัดสร้างพระ** (อยู่ในส่วน modals) — `TF` = สถานะหน้าออกแบบ 5 ขั้น (`wizHTML`, ตัวอย่าง 3D ผ่าน `PVA` + thumbnail renderer), `makeBatch`, หน้ารุ่น `batchCard` (หลอด hype/heat, `priceSVG`, `bAct` สายขาว/สายเทา, `LIVE` ไลฟ์สด), `dayBatch` (ตอน endDay), `sellStock`; ข้อมูล `INGR`, `RECIPES` (ลับ), `LUCKY` (ลับ), `EVENTS`, `PAGES`; batch มี `hype heat mp base hist keep stock coded seqOK`; `S.trust` / `S.templeBan` / `S.recipes` / `S.kaka` / `S.tlog` เติมค่าเซฟเก่าใน `normTemple()`
+9.9 **endgame** (`endgame.js`) — บารมี ★ (`stars`, `starMult` ราคาขาย, `starPatience`), พระในตำนาน `LEGENDS` (ไม่อยู่ใน MODELS, เปิดในสมุดเมื่อ `S.legend[id].open`, `addClue`, `legendCustomer`, `markOwned`), ดวล `RIVALS` (โหมด stage `duel`), งานประมูล (โหมด stage `auction`, ผู้ร่วมประมูล greedy/careful/shill), สาขา `BRANCH_T`, พิพิธภัณฑ์ (`museumScore`), สมาคม (`voteScore`), ฉากจบ `ENDINGS` (`queueEnding` รอให้ modal ปิดก่อน), หน้าเป้าหมาย `goalsHTML`; ปุ่มในหน้าต่างใช้ `data-eg`, ปุ่มบน stage ใช้ `data-a="eg:ชื่อ"`; state ใหม่เติมค่าใน `normEndgame()`
 10.5 **debug** — แผงทดสอบ (`DEBUG_ACTS`) แสดงเฉพาะเมื่อ URL มี `#debug` (เปิดเกมด้วย `index.html#debug`)
 10. **modals** — ร้านอุปกรณ์, สมุดองค์ครู (`BK`: หมวด/ค้นหา/ตัวกรองภาค ความหายาก เลเวล, `S.owned` = สมุดสะสม), เลี่ยมกรอบ (`frameSvcHTML`), ตู้พระ, ประกวด (`runContest`), จัดสร้าง (`makeBatch`), เมนู, วิธีเล่น
 
 ## หลักการสำคัญ
 - องค์ครูของแต่ละรุ่นต้องหน้าตาเหมือนกันทุกครั้ง: ลวดลายที่ "เป็นของรุ่น" ใช้ seed จาก `hash(model.id)` ส่วนรอยเฉพาะองค์ (ลายนิ้วมือ บิ่น) ใช้ seed ของแต่ละชิ้น
 - จุดสังเกตใหม่ต้องเพิ่มทั้งใน `TELLS` (label, ตัวเลือก, ข้อความ) และในโค้ดวาด/สร้าง 3D ให้ "มองเห็นได้จริง" บนองค์พระ (หรือผ่านเครื่องมือ เช่น UV/ตาชั่ง) และถ้าแตะชี้ได้ ให้เพิ่มโซนใน `frontZone` / `keyPos` ด้วย
-- field ใหม่ใน `S` ต้องมีค่าเริ่มต้นทั้งใน `newGame()` และบรรทัดเติมค่าให้เซฟเก่า (ต่อจาก `S.stats.spotted = ...`)
+- field ใหม่ใน `S` ต้องมีค่าเริ่มต้นทั้งใน `newGame()` และบรรทัดเติมค่าให้เซฟเก่า (ต่อจาก `S.stats.spotted = ...`) — ของเฟส 3 ขึ้นไปใส่ใน `normEndgame()` ซึ่งเรียกทั้งตอนโหลดและตอนเริ่มเกมใหม่
 - ห้ามเฉลยโบนัสชื่อมงคลและสูตรตำรับลับใน UI/วิธีเล่น (ค่า "กระแสเริ่มต้น" ที่โชว์ตอนออกแบบไม่รวมโบนัสลับ)
 - แถวปุ่ม `#act` = แถวเครื่องมือ (`toolBtns`: พลิก ส่อง เทียบ UV) + แถวตัดสินใจ ไม่เกิน 4 ปุ่มต่อแถว; สมุดเปิดจากแท็บล่าง, เช็กลิสต์/ถามอาจารย์เป็นชิปบน stage (`#chips`)
 - พระ วัด ราคา และจุดสังเกตทั้งหมดเป็นเรื่องสมมติ ห้ามใช้ชื่อพระเครื่อง/วัด/เกจิจริง
