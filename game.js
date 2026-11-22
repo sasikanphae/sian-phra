@@ -1,7 +1,8 @@
 import * as THREE from './three.module.min.js';
 import { $, clamp, lerp, rng, hash, fmt, pick, esc, round100, wpick, inPoly, mk } from './util.js';
 import { SUBP, subsOf, subOf, RAR, REGIONS, CATS, isCoin, catOf, FRAMES, MATS, THW, TELLS, tellTxt, MODELS, LEVELS, UNLOCK, TEMPLES, PIMS, DW, mWeight, TOOLS, INGR, RECIPES, EVENTS, PAGES, LIVE_T, LIVE_Q, VIEWERS, LUCKY, NAME_A, NAME_B, ingrList, ingrKey, ingrTxt, mutIngr, UNIT, NAMES, HONEST, SLICK } from './data.js';
-import { initEndgame, normEndgame, stars, starTitle, starTxt, starMult, starPatience, starProgress, LEGENDS, legendById, legendsOpen, legendsOwned, addClue, onCustomerDone, markOwned, legendCustomer, RIVALS, duelOn, aucOn, aucToday, modePiece, modeKey, modeCard, modeActs, modeQinfo, modeAct, leaveMode, egTick, onSpotHit, endgameDay, goalsHTML, egClick, showEnding, popEnding, museumScore } from './endgame.js';
+import { initKarma, normKarma, addMerit, addKarma, goodMult, mkHTML, attachCert, checkCert, victimCustomer, victimActs, startReceive, rumorHTML, donateHTML, dressPiece, sellChoice, sellHTML, confirmGrey, BRIBE_COST, bribeOutcome, attackRival, karmaDay, queueEnding, popEnding, endingBookHTML, titles, endingsLine, kPiece, kKey, kCard, kActs, kAct, kClick } from './karma.js';
+import { initEndgame, normEndgame, stars, starTitle, starTxt, starMult, starPatience, starProgress, LEGENDS, legendById, legendsOpen, legendsOwned, addClue, onCustomerDone, markOwned, legendCustomer, RIVALS, duelOn, aucOn, aucToday, modePiece, modeKey, modeCard, modeActs, modeQinfo, modeAct, leaveMode, egTick, onSpotHit, endgameDay, goalsHTML, egClick, museumScore } from './endgame.js';
 import { poseFig, TW, TH, g, qb, OUT, outlinePts, inset, pathPts, dome, limb, slab, glyph, unalom, FIG, drawPidta, drawFigure, drawFront, drawBack, drawCode, boxBlur, noise, chan, makeFace } from './amulet2d.js';
 import { SIDE, sideTex, buildAmulet, disposeGroup, makeEnv, setupScene, makeRenderer } from './amulet3d.js';
 
@@ -250,7 +251,7 @@ function normTemple() {
     b.base ??= cm ? cm.price : b.unit * 12; b.mp ??= b.base; b.hist ??= b.open ? [Math.round(b.mp)] : [];
   }
 }
-normTemple(); normEndgame(S);
+normTemple(); normEndgame(S); normKarma(S);
 // เชื่อมโมดูลเป้าหมายหลัง Lv.6 (endgame.js ไม่ import จาก game.js จึงส่งฟังก์ชันผ่าน api แบบเรียกทีหลัง)
 initEndgame({
   S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(), reModal: h => reModal(h),
@@ -258,6 +259,16 @@ initEndgame({
   setMode: m => { pauseDaily(); mode = m; ownItem = null; spot = null; lastShown = null; closeModal(); render(); },
   addItem: (p, paid) => { takeItem({ ...p, id: S.nextId++, ask: paid }); },
   thumbKey: (m, spec, cond, seed) => { const k = String(hash(JSON.stringify([m.id, spec, cond, seed]))); XA.set(k, [m, spec, cond, seed]); return k; },
+  queueEnding: id => queueEnding(id), endingsLine: () => endingsLine(), attackRival: (id, n) => attackRival(id, n),
+});
+// เชื่อมโมดูลบุญกรรม/สายเทา/ฉากจบ (karma.js)
+initKarma({
+  S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(), reModal: h => reModal(h),
+  lvl: () => lvl(), gainXP: n => gainXP(n), modelById: id => modelById(id), mutate: (...a) => mutate(...a), curPiece: () => curPiece(), ownItem: () => ownItem,
+  setMode: m => { mode = m; ownItem = null; spot = null; lastShown = null; closeModal(); render(); }, nextCustomer: () => nextCustomer(), tlog: (m, k) => tlog(m, k),
+  finishBuy: (c, p, sw) => finishBuy(c, p, sw), rejectCustomer: c => { S.rejected.push({ modelId: c.modelId, genuine: c.genuine, spec: c.spec, cond: c.cond, seed: c.seed }); nextCustomer(); },
+  relook: () => { lastShown = null; }, offerFor: it => offerFor(it), sellAt: (it, p, msg) => sell(it, { price: p, msg }), aucToday: () => aucToday(),
+  starTxt: () => starTxt(stars()) || '★0', legendsOwned: () => legendsOwned(), queueEnding: id => queueEnding(id), restartKeep: () => restartGame(),
 });
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ } }
 const lvl = () => { let l = 1; LEVELS.forEach((L, i) => { if (S.xp >= L.xp) l = i + 1; }); return l; };
@@ -344,6 +355,8 @@ function genQueue() {
   const r = rng(hash('d' + S.day + ':' + S.seed)), L = lvl(); S.queue = [];
   for (let i = 0, n = 4 + Math.floor(L / 2) + Object.keys(S.duel.regs).length; i < n; i++) S.queue.push(makeCustomer(r, L));
   const lc = legendCustomer(r); if (lc) S.queue.splice(Math.min(2, S.queue.length), 0, lc);
+  for (const c of S.queue) attachCert(c, r);
+  const vc = victimCustomer(r); if (vc) S.queue.splice(Math.min(3, S.queue.length), 0, vc);
   for (const c of S.queue) c.patience += starPatience();
 }
 if (!S.queue.length && S.day === 1 && !S.inv.length) { genQueue(); if (S.tut.on) S.queue.unshift(...tutCustomers()); }
@@ -356,6 +369,7 @@ function loadStage() {
   let key = null, args = null;
   if (mode === 'own' && ownItem) { key = 'i' + ownItem.id; args = [modelById(ownItem.modelId), ownItem.spec, ownItem.cond, ownItem.seed]; }
   else if (mode === 'daily') { const it = DS[D.run.idx]; key = 'd' + D.run.date + ':' + D.run.idx; args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
+  else if (kPiece(mode)) { const it = kPiece(mode); key = kKey(mode); args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (modePiece(mode)) { const it = modePiece(mode); key = modeKey(mode); args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (mode === 'shop' && S.queue[0]) { const c = S.queue[0]; key = 'c' + c.id; args = [modelById(c.modelId), c.spec, c.cond, c.seed]; }
   const pc = curPiece(), fr = pc && pc.frame && !pc.open ? pc.frame : null; if (args) { args.push({ frame: fr }); key += fr ? ':f' : ''; }
@@ -371,14 +385,16 @@ function render() {
   $('#xpfill').style.width = (Ln ? clamp((S.xp - Lc.xp) / (Ln.xp - Lc.xp), 0, 1) : starProgress()) * 100 + '%';
   $('#xpfill').classList.toggle('star', L >= 6);
   $('#rep').innerHTML = `${S.rep}<small>ชื่อเสียง</small>`;
+  $('#mk').innerHTML = mkHTML();
   $('#day').innerHTML = `${S.day}<small>วันที่</small>`;
   renderCard(); renderActs(); renderTabs(); loadStage(); renderSpotBar(); renderChips(); checkTut();
   $('#hint').textContent = spotting() ? 'แตะ = ชี้จุดที่ผิด • ลาก = หมุน' : HINT;
   const q = $('#qinfo'); q.innerHTML = '';
   if (mode === 'daily') q.innerHTML = `<span class="badge gold" id="dtimer">⏱ ${fmtTime(dElapsed())}</span>`;
   if (mode === 'duel' || mode === 'auction') q.innerHTML = modeQinfo(mode);
-  if (mode === 'shop' && aucToday()) q.innerHTML += '<button class="badge gold qbtn" data-eg="auction">วันนี้มีงานประมูล แตะเพื่อเข้างาน</button>';
   if (mode === 'shop' && S.queue.length) q.innerHTML = `<span class="badge">ลูกค้ารอ ${S.queue.length} คน</span>` + (L >= 3 && S.day % 3 === 0 && S.contestDay !== S.day ? `<span class="badge gold">วันนี้มีงานประกวดพระ</span>` : '');
+  if (mode === 'shop' && S.rumor.on) q.innerHTML += '<button class="badge bad qbtn" id="rumorBtn">มีข่าวลือว่าร้านขายของเก๊! แตะเพื่อแก้ข่าว</button>';
+  if (mode === 'shop' && aucToday()) q.innerHTML += '<button class="badge gold qbtn" data-eg="auction">วันนี้มีงานประมูล แตะเพื่อเข้างาน</button>';
   let em = stage.querySelector('.empty'); if (em) em.remove();
   if (mode === 'shop' && !S.queue.length) {
     em = document.createElement('div'); em.className = 'empty';
@@ -393,6 +409,7 @@ function specFacts(m, o) { return `<span>${esc(MATS[m.mat].name)}</span>` + (S.t
 function renderCard() {
   const el = $('#card');
   if (mode === 'duel' || mode === 'auction') { el.innerHTML = modeCard(mode); return; }
+  if (mode === 'recv') { el.innerHTML = kCard(mode); return; }
   if (mode === 'daily') {
     const R0 = D.run, it = DS[R0.idx], m = modelById(it.modelId), ok = R0.ans[R0.idx];
     const marks = R0.ans.map(a => a ? '🟩' : '🟥').join('') + '⬜'.repeat(5 - R0.ans.length);
@@ -420,7 +437,7 @@ function renderCard() {
   el.innerHTML = `<div class="ava">${esc(c.name.replace(/^(ลุง|ป้า|เฮีย|เจ๊|พี่|น้อง|ตา|คุณ|ยาย|เสี่ย|น้า|อาจารย์)/, '').slice(0, 1))}</div>
     <div><div class="who">${esc(c.name)} <span class="badge" title="ความอดทนในการต่อราคา">อดทน ${'●'.repeat(c.patience)}${'○'.repeat(Math.max(0, 3 - c.patience))}</span></div><div class="line">“${esc(c.line)}”</div></div>
     <div class="pname">${esc(m.name)} ${rarBadge(m)}</div>
-    <div class="facts">${specFacts(m, c)}${cs ? `<span>ลูกค้าบอกว่า <b>${esc(cs.name)}</b></span>` : ''}${c.frame ? `<span>${esc(FRAMES[c.frame].name)}${c.open ? ' (ถอดแล้ว)' : ''}</span>` : ''}<span>สภาพ <b>${c.cond}/100</b></span><span>ราคาตลาดถ้าแท้${cs ? 'ตามพิมพ์ที่บอก' : ''} <b>${fmt(m.price * (cs ? cs.mult : 1) * cf(c.cond))}</b></span><span>ขอให้เช่า <b>${fmt(c.ask)}</b></span></div>`;
+    <div class="facts">${specFacts(m, c)}${cs ? `<span>ลูกค้าบอกว่า <b>${esc(cs.name)}</b></span>` : ''}${c.certCard ? '<span class="badge gold">แนบใบรับรองมาด้วย</span>' : ''}${c.frame ? `<span>${esc(FRAMES[c.frame].name)}${c.open ? ' (ถอดแล้ว)' : ''}</span>` : ''}<span>สภาพ <b>${c.cond}/100</b></span>${c.victim ? `<span>เสียเงินไป <b>${fmt(c.ask)}</b></span>` : `<span>ราคาตลาดถ้าแท้${cs ? 'ตามพิมพ์ที่บอก' : ''} <b>${fmt(m.price * (cs ? cs.mult : 1) * cf(c.cond))}</b></span><span>ขอให้เช่า <b>${fmt(c.ask)}</b></span>`}</div>`;
 }
 // แถวบน = เครื่องมือส่อง, แถวล่าง = การตัดสินใจ (ไม่เกิน 4 ปุ่มต่อแถว อ่านง่ายบนจอ 360px)
 const tagsOf = it => (it.consign ? `<span class="badge cons">ฝากขาย • เหลือ ${it.consign.until - S.day} วัน</span>` : '') + (it.share ? '<span class="badge shr">หุ้น 50%</span>' : '');
@@ -436,6 +453,10 @@ function renderActs() {
     el.innerHTML = rows(toolBtns(), row2);
   } else if (mode === 'duel' || mode === 'auction') {
     el.innerHTML = rows(toolBtns(), modeActs(mode));
+  } else if (mode === 'recv') {
+    el.innerHTML = rows(toolBtns(), kActs(mode));
+  } else if (mode === 'shop' && S.queue[0] && S.queue[0].victim && !spotting()) {
+    el.innerHTML = rows(toolBtns(), victimActs(S.queue[0]));
   } else if (mode === 'daily') {
     el.innerHTML = rows(toolBtns(), D.run.rev ? `<button class="btn dim" data-a="dexit">ออก</button><button class="btn ok span2" data-a="dnext">${D.run.idx >= 4 ? 'ดูผลสรุป' : 'องค์ถัดไป'}</button>`
       : `<button class="btn dim" data-a="dexit">ออก</button><button class="btn ok" data-a="dyes">แท้</button><button class="btn no" data-a="dno">เก๊</button>`);
@@ -471,8 +492,13 @@ const subMult = it => { const m = modelById(it.modelId), x = subOf(m, it.spec &&
 function buy() {
   const c = S.queue[0];
   if (S.money < c.ask) { openModal(shortHTML()); return; }
-  S.money -= c.ask; S.stats.bought++; takeItem(c);
-  sfx('buy'); toast(`รับเช่าแล้ว เก็บเข้าตู้พระ`, 'good'); nextCustomer();
+  if (lvl() >= 3 && !c.tut) { startReceive(c); return; } // ตรวจรับของก่อนจ่าย (บางครั้งลูกค้าสลับองค์)
+  finishBuy(c, c);
+}
+function finishBuy(c, p, swapped = false) {
+  S.money -= c.ask; S.stats.bought++; takeItem({ ...c, spec: p.spec, genuine: p.genuine, cond: p.cond, seed: p.seed });
+  const withCert = c.certCard && c.certCard.real && !swapped; if (withCert) S.inv[0].cert = true; // ใบรับรองของจริงที่แนบมา
+  sfx('buy'); toast(`รับเช่าแล้ว เก็บเข้าตู้พระ${withCert ? ' (พร้อมใบรับรอง)' : ''}`, 'good'); nextCustomer();
 }
 /* เงินไม่พอ: ฝากขาย / เทิร์นพระ / ชวนเซียนลงหุ้น / ยืมเฮียโรงรับจำนำ */
 const shareHalf = c => Math.ceil(c.ask / 200) * 100;
@@ -591,16 +617,17 @@ function myCut(it, p) { return it.consign ? Math.max(p - it.consign.price, round
 // ของหุ้นถูกเปิดโปงว่าเก๊: เพื่อนไม่พอใจ ชื่อเสียง −3 และงดชวนลงหุ้น 3 วัน
 function shareFake(it) { if (!it.share || it.shareHit) return ''; it.shareHit = true; S.rep = Math.max(0, S.rep - 3); S.shareBan = S.day + 3; return ' • เซียนหุ้นส่วนไม่พอใจ ชื่อเสียง −3 และงดชวนลงหุ้น 3 วัน'; }
 function certify(it) { const fee = certFee(it); if (S.money < fee) { toast('เงินไม่พอจ่ายค่าตรวจ', 'bad'); return; } S.money -= fee; it.pend = S.day; toast('ส่งเข้าสมาคมตรวจพระแล้ว ผลออกวันพรุ่งนี้'); render(); }
-function sell(it) {
+function sell(it, opt = {}) {
+  if (opt.price == null && sellChoice(it)) { openModal(sellHTML(it)); return; }
   if (!it.genuine) {
     it.xp = true; gainXP(3); S.stats.fooled++;
     if (it.consign) { S.rep = Math.max(0, S.rep - 8); S.inv = S.inv.filter(x => x !== it); toast(`เซียนผู้ซื้อตรวจพบว่าเป็นพระเก๊! ชื่อเสียง −8 และต้องคืนพระให้${it.consign.owner}`, 'bad'); toShop(); return; }
     S.rep = Math.max(0, S.rep - 6); it.cert = false; toast('เซียนผู้ซื้อตรวจพบว่าเป็นพระเก๊! ชื่อเสียง −6' + shareFake(it), 'bad'); render(); return;
   }
-  const p = offerFor(it), mine = myCut(it, p), gain = mine - it.paid; S.money += mine; S.inv = S.inv.filter(x => x !== it); S.rep = Math.min(100, S.rep + 1); S.stats.sold++;
+  const p = opt.price ?? offerFor(it), mine = myCut(it, p), gain = mine - it.paid; S.money += mine; S.inv = S.inv.filter(x => x !== it); S.rep = Math.min(100, S.rep + 1); S.stats.sold++;
   gainXP((it.xp ? 0 : revealXP(it)) + 5 + clamp(gain / 1000, 0, 40));
   const split = it.consign ? ` • จ่ายเจ้าของ ${fmt(p - mine)}` : it.share ? ` • แบ่งเพื่อน ${fmt(p - mine)}` : '';
-  toast(`ปล่อยเช่าได้ ${fmt(p)}${split} • ${gain >= 0 ? 'กำไร' : 'ขาดทุน'} ${fmt(Math.abs(gain))}`, gain >= 0 ? 'good' : 'bad');
+  toast(`${opt.msg ? opt.msg + ' • ' : ''}ปล่อยเช่าได้ ${fmt(p)}${split} • ${gain >= 0 ? 'กำไร' : 'ขาดทุน'} ${fmt(Math.abs(gain))}`, gain >= 0 ? 'good' : 'bad');
   toShop();
 }
 function scrap(it) {
@@ -639,7 +666,7 @@ function endDay() {
   for (const it of S.inv.filter(x => x.consign && S.day >= x.consign.until)) {
     S.inv = S.inv.filter(x => x !== it); lines.push(['', `${it.consign.owner}มารับ ${modelById(it.modelId).name} คืน (ฝากขายครบ 5 วันแล้วยังขายไม่ออก)`]);
   }
-  endgameDay(lines);
+  endgameDay(lines); karmaDay(lines);
   const rent = 200 + 300 * L0; S.money -= rent; lines.push(['', `ค่าเช่าแผงพระ ${fmt(-rent)}`]);
   if (S.loan.amt > 0) {
     const fee = Math.round(S.loan.amt * .03); S.loan.amt += fee;
@@ -674,12 +701,12 @@ function dayBatch(b, lines) {
   }
   const r = rng(hash(b.id + ':' + S.day));
   if (!b.done) {
-    if (r() < .1) { b.hype = Math.min(100, b.hype + 25); lines.push(['gold', `ข่าวดี! ${pick(r, EVENTS).replace('{n}', nm)} (กระแส +25)`]); }
+    if (r() < .1 * goodMult()) { b.hype = Math.min(100, b.hype + 25); lines.push(['gold', `ข่าวดี! ${pick(r, EVENTS).replace('{n}', nm)} (กระแส +25)`]); }
     const hoard = b.hoard === S.day;
     let n = Math.min(avail - b.sold, Math.round(b.qty * (.06 + r() * .09) * (.7 + t.fame * .35) * (1 + S.rep / 120) * (.5 + b.hype / 100)));
     if (hoard) n = Math.floor(n / 2);
     b.sold += n; const rev = n * b.unit; S.money += Math.round(rev * .7); gainXP(n / 15);
-    if (n > 0) S.trust[t.id] = clamp(tTrust(t.id) + 1, 0, 100);
+    if (n > 0) { S.trust[t.id] = clamp(tTrust(t.id) + 1, 0, 100); addMerit(1); }
     lines.push(['good', `${nm}: บูชาออกไป ${n} องค์${hoard ? ' (กั๊กของไว้ครึ่งหนึ่ง)' : ''} รายได้ ${fmt(rev * .7)} (ถวายวัด ${fmt(rev * .3)})`]);
     if (b.sold >= avail) {
       b.done = true; S.rep = Math.min(100, S.rep + 5); gainXP(100); b.base = Math.round(b.base * 1.6); b.mp = Math.round(b.mp * 1.3);
@@ -714,6 +741,7 @@ function curPiece() {
   if (mode === 'own' && ownItem) return ownItem;
   if (mode === 'daily' && DS && D.run) return DS[D.run.idx];
   if (modePiece(mode)) return modePiece(mode);
+  if (kPiece(mode)) return kPiece(mode);
   return mode === 'shop' ? S.queue[0] || null : null;
 }
 // เช็กลิสต์: ผู้เล่นติ๊กเอง เกมไม่ช่วยตอบ ล้างเมื่อเปลี่ยนองค์ (ใน loadStage)
@@ -732,7 +760,9 @@ function renderChips() {
   if (!on) return;
   const nm = Object.keys(CL.marks).length, canAsk = mode !== 'daily' && mode !== 'duel';
   const m = modelById(it.modelId), canShake = m && ('rattle' in m.spec || 'mercury' in m.spec);
-  el.innerHTML = (it.frame ? `<button class="chip" id="frameBtn">${it.open ? 'ใส่กรอบกลับ' : 'ถอดกรอบ'}<small>${esc(FRAMES[it.frame].name)}</small></button>` : '') + (canShake ? `<button class="chip" id="shakeBtn">เขย่า</button>` : '') + `<button class="chip" id="clBtn" aria-expanded="${CL.open}">เช็กลิสต์${nm ? ` ${nm}` : ''}</button>` + (canAsk ? `<button class="chip" id="askBtn">ถามอาจารย์<small>${it.teach ? 'ดูคำตอบเดิม' : askLeft() ? `เหลือ ${askLeft()} ครั้ง` : fmt(askCost())}</small></button>` : '');
+  const certChip = mode === 'shop' && it.certCard ? `<button class="chip" id="certBtn">ตรวจใบเซอร์<small>${it.certPaid ? 'ดูอีกครั้ง' : fmt(500)}</small></button>` : '';
+  const dressChip = mode === 'own' && !it.dressed && !it.consign && it.cert !== false ? `<button class="chip grey" id="dressBtn">แต่งผิว<small>สายเทา</small></button>` : '';
+  el.innerHTML = certChip + dressChip + (it.frame ? `<button class="chip" id="frameBtn">${it.open ? 'ใส่กรอบกลับ' : 'ถอดกรอบ'}<small>${esc(FRAMES[it.frame].name)}</small></button>` : '') + (canShake ? `<button class="chip" id="shakeBtn">เขย่า</button>` : '') + `<button class="chip" id="clBtn" aria-expanded="${CL.open}">เช็กลิสต์${nm ? ` ${nm}` : ''}</button>` + (canAsk ? `<button class="chip" id="askBtn">ถามอาจารย์<small>${it.teach ? 'ดูคำตอบเดิม' : askLeft() ? `เหลือ ${askLeft()} ครั้ง` : fmt(askCost())}</small></button>` : '');
   if (CL.open) $('#clp').innerHTML = clHTML();
 }
 function shakePiece() {
@@ -948,20 +978,21 @@ function contestHTML() {
   if (nextDay !== S.day) return `<h2>งานประกวดพระ</h2><p>งานจัดทุก 3 วัน ครั้งถัดไปคือ <b>วันที่ ${nextDay}</b></p><p class="note">เตรียมพระสภาพสวยที่มีใบรับรองไว้ เพิ่มโอกาสติดรางวัล ถ้าส่งของเก๊เข้าประกวดจะถูกคัดออกและเสียชื่อเสียง</p>`;
   const ok = S.inv.filter(it => !it.pend && it.cert !== false && !it.consign);
   return `<h2>งานประกวดพระ วันที่ ${S.day}</h2><p>เลือกได้สูงสุด 3 องค์ ค่าสมัครองค์ละ ${fmt(1000)} กรรมการให้คะแนนจากความแท้ สภาพ ความหายาก และใบรับรอง</p>` +
-    (ok.length ? ok.map(it => { const m = modelById(it.modelId); return `<label class="pick"><input type="checkbox" value="${it.id}"><img data-thumb="i:${it.id}" alt=""><span><b>${esc(m.name)}</b><br><span class="note">สภาพ ${it.cond}${it.cert ? ' • มีใบรับรอง' : ''}</span></span></label>`; }).join('') + `<div class="row"><button class="btn ok" id="enterC">ส่งเข้าประกวด</button></div>`
+    (ok.length ? ok.map(it => { const m = modelById(it.modelId); return `<label class="pick"><input type="checkbox" value="${it.id}"><img data-thumb="i:${it.id}" alt=""><span><b>${esc(m.name)}</b><br><span class="note">สภาพ ${it.cond}${it.cert ? ' • มีใบรับรอง' : ''}</span></span></label>`; }).join('') + `<div class="row"><button class="btn ok" id="enterC">ส่งเข้าประกวด</button><button class="btn grey" id="enterCB">ส่ง + ติดสินบนกรรมการ<small>สายเทา</small></button></div>`
       : '<p>ยังไม่มีพระที่ส่งประกวดได้ในตู้</p>');
 }
 function ownHype(it) { const b = S.batches.find(x => x.modelId === it.modelId); if (!b) return ''; b.hype = Math.min(100, b.hype + 20); return ' • กระแสรุ่นนี้ +20'; }
-function runContest(ids) {
+function runContest(ids, bribe) {
   const items = S.inv.filter(it => ids.includes(String(it.id))); if (!items.length) { toast('เลือกพระอย่างน้อย 1 องค์', 'bad'); return; }
   if (items.length > 3) { toast('ส่งได้สูงสุด 3 องค์', 'bad'); return; }
-  const fee = items.length * 1000; if (S.money < fee) { toast('เงินไม่พอค่าสมัคร', 'bad'); return; }
+  const fee = items.length * 1000 + (bribe ? BRIBE_COST : 0); if (S.money < fee) { toast('เงินไม่พอค่าสมัคร', 'bad'); return; }
   S.money -= fee; S.contestDay = S.day;
+  const bonus = bribe && bribeOutcome() === 'ok' ? 15 : 0; // ติดสินบนกรรมการ: +15 ถ้าไม่โดนแฉ
   const res = items.map(it => {
     const m = modelById(it.modelId);
     if (!it.genuine) { S.rep = Math.max(0, S.rep - 8); it.cert = false; it.xp = true; return ['bad', `${m.name}: ถูกคัดออก กรรมการตัดสินว่าไม่แท้ (ชื่อเสียง −8)${shareFake(it)}`]; }
     const pk = it.share ? .5 : 1, ps = it.share ? ' (แบ่งเพื่อนครึ่งหนึ่ง)' : '';
-    const sc = it.cond + Math.min(m.lvl, 6) * 4 + (it.cert ? 4 : 0) + Math.random() * 14;
+    const sc = it.cond + Math.min(m.lvl, 6) * 4 + (it.cert ? 4 : 0) + Math.random() * 14 + bonus;
     if (sc >= 112) { S.money += Math.round(m.price * .15 * pk); gainXP(120); S.rep = Math.min(100, S.rep + 6); it.award = Math.max(it.award, 3); const kk = !S.kaka; S.kaka = true; return ['gold', `${m.name}: ชนะเลิศ! เงินรางวัล ${fmt(m.price * .15 * pk)}${ps} +120 XP ชื่อเสียง +6${ownHype(it)}${kk ? ' • ได้รับมวลสาร "ดินกากยายักษ์" ใช้จัดสร้างพระได้แล้ว' : ''}`]; }
     if (sc >= 102) { S.money += Math.round(m.price * .06 * pk); gainXP(70); S.rep = Math.min(100, S.rep + 3); it.award = Math.max(it.award, 2); return ['good', `${m.name}: รองชนะเลิศอันดับ 1 เงินรางวัล ${fmt(m.price * .06 * pk)}${ps} +70 XP${ownHype(it)}`]; }
     if (sc >= 94) { gainXP(40); S.rep = Math.min(100, S.rep + 1); it.award = Math.max(it.award, 1); return ['good', `${m.name}: รองชนะเลิศอันดับ 2 +40 XP${ownHype(it)}`]; }
@@ -1197,8 +1228,10 @@ function buyTool(id) {
   if (S.money < t.price) { toast('เงินไม่พอ', 'bad'); return; }
   S.money -= t.price; S.tools[id] = true; sfx('buy'); toast(`ได้ ${t.name} มาแล้ว`, 'good'); openModal(toolShopHTML()); render();
 }
+// เริ่มเกมใหม่ (ฉากจบ/ฉายาเก็บไว้ใน META ของ karma.js จึงไม่หาย)
+function restartGame() { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); normEndgame(S); normKarma(S); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
 function menuHTML() {
-  return `<h2>เมนู</h2>${dailyBtnHTML()}<button class="btn dailyb goalb" data-eg="goals">เป้าหมาย<small>${lvl() >= 6 ? `${starTxt(stars()) || '★0'} • ตำนาน ${legendsOwned()}/5` : 'ดวล ประมูล ตำนาน สาขา พิพิธภัณฑ์ สมาคม'}${aucToday() ? ' • วันนี้มีงานประมูล!' : ''}</small></button><h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
+  return `<h2>เมนู</h2>${dailyBtnHTML()}<button class="btn dailyb goalb" data-eg="goals">เป้าหมาย<small>${lvl() >= 6 ? `${starTxt(stars()) || '★0'} • ตำนาน ${legendsOwned()}/5` : 'ดวล ประมูล ตำนาน สาขา พิพิธภัณฑ์ สมาคม'}${aucToday() ? ' • วันนี้มีงานประมูล!' : ''}</small></button><div class="row"><button class="btn" id="donateBtn">ทำบุญ ถวายวัด<small>บุญ ${S.merit} • กรรม ${S.karma}</small></button><button class="btn" id="endBookBtn">สมุดฉากจบ</button>${S.rumor.on ? '<button class="btn no" id="rumorBtn">แก้ข่าวลือ</button>' : ''}</div>${titles().length ? `<p class="note">ฉายาที่ปลดล็อก: ${esc(titles().join(', '))}</p>` : ''}<h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
   ${S.loan.amt ? `<h3>หนี้เฮียโรงรับจำนำ</h3><p>คงเหลือ <b class="debtc">${fmt(S.loan.amt)}</b> • ดอกเบี้ย 3% ต่อวัน • ${loanLeftDays() > 0 ? `อีก ${loanLeftDays()} วันจะโดนยึดพระ` : 'ครบกำหนดแล้ว ปิดร้านวันนี้จะโดนยึดพระ'}</p>
   <div class="row"><button class="btn ok" id="repayBtn" ${S.money <= 0 ? 'disabled' : ''}>คืนเงิน ${fmt(Math.max(0, Math.min(S.money, S.loan.amt)))}${S.money < S.loan.amt ? '<small>(คืนได้เท่าที่มี)</small>' : ''}</button></div>` : ''}
   <div class="row"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn" id="tutBtn">ดูบทเรียนอีกครั้ง</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
@@ -1216,6 +1249,8 @@ const HOW = `<h2>ยินดีต้อนรับสู่แผงพระ
 <li>ซื้อ <b>กล้องส่อง 20x</b>, <b>ไฟฉาย UV</b> และ <b>ตาชั่ง</b> ได้ที่ร้านอุปกรณ์เซียน (ในเมนู ≡ หรือสมุด) ไว้จับ "เก๊เทพ" ที่โผล่มาตั้งแต่ Lv.3</li>
 <li><b>ส่องพระประจำวัน</b> (ในเมนู ≡): 5 องค์ชุดเดียวกันทุกคน ตอบแค่แท้/เก๊ จับเวลา แล้วคัดลอกผลไปแชร์ เล่นได้วันละครั้ง</li>
 <li>ตั้งแต่ Lv.4 มี <b>ดวลส่องพระ</b> กับเซียนคู่แข่งวันละครั้ง และ <b>งานประมูล</b> ทุก 5 วัน • ถึง Lv.6 XP ที่เกินจะกลายเป็น <b>ดาวบารมี</b> และเปิดการตามล่าพระในตำนาน สาขา พิพิธภัณฑ์ และสมาคม ดูความคืบหน้าทั้งหมดใน <b>เมนู ≡ → เป้าหมาย</b></li>
+<li><b>บุญ</b> และ <b>กรรม</b> (มุมบนจอ): ทำบุญ ช่วยลูกค้าที่โดนหลอก และบอกผู้ซื้อตามจริงเพิ่มบุญ ส่วนทางเลือก <b>สายเทา</b> (แต่งผิวแล้วไม่บอก ติดสินบนกรรมการ จ้างหน้าม้า ปล่อยข่าวโจมตี) ได้เร็วแต่เพิ่มกรรม เสี่ยงโดนแฉและโดนหน่วยปราบพระปลอมเข้าตรวจ • ระวังใบรับรองปลอม และตรวจรับของทุกครั้งก่อนจ่ายเงิน</li>
+<li>เกมมีหลายฉากจบ ดูที่ปลดล็อกแล้วใน <b>สมุดฉากจบ</b> (เมนู ≡)</li>
 <li>สะสม XP ไต่ระดับ: Lv.3 ปลดล็อกงานประกวดพระ, Lv.5 ปลดล็อกการจัดสร้างพระกับวัด</li>
 <li><b>จัดสร้างพระ</b> (Lv.5): เลือกวัดและพิมพ์ ใส่มวลสาร ตั้งชื่อรุ่นเอง และเก็บสต็อกไว้ขายเองได้ ลองผสมมวลสารหลาย ๆ แบบ อาจเจอตำรับลับ • มวลสารเทียมถูกแต่เสี่ยง</li>
 <li>หลังสร้างเสร็จ ดูแล <b>กระแส</b> ด้วยไลฟ์สด จ้างเพจรีวิว ทำรุ่นพิเศษ หรือส่งเข้าประกวด ส่วน <b>สายเทา</b> (กั๊กของ ซื้อคืน ปล่อยข่าว) ดันราคาได้เร็ว แต่เพิ่ม heat ถ้าโดนแฉจะเสียหายหนักและวัดเลิกไว้ใจ • กระแสแรงเกินไปนาน ๆ ระวังฟองสบู่ และของเก๊รุ่นคุณจะเริ่มระบาด (ตอกโค้ดกำกับองค์ช่วยได้)</li></ul>
@@ -1226,6 +1261,7 @@ const HOW = `<h2>ยินดีต้อนรับสู่แผงพระ
 $('#act').addEventListener('click', e => {
   const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
   if (a.startsWith('eg:')) { modeAct(a.slice(3)); return; }
+  if (a.startsWith('k:')) { kAct(a.slice(2)); return; }
   ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, uv: toggleUV, cmp: toggleCmp, framesvc: () => openModal(frameSvcHTML()), dyes: () => dailyAnswer(true), dno: () => dailyAnswer(false), dnext: dailyNext, dexit: toShop, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
      back: toShop, cert: () => certify(ownItem), sell: () => sell(ownItem), scrap: () => scrap(ownItem) })[a]?.();
 });
@@ -1245,6 +1281,7 @@ $('#mbody').addEventListener('click', e => {
   if (e.target.closest('#dailyBtn')) { enterDaily(); return; }
   if (e.target.id === 'shareBtn') { shareDaily(); return; }
   if (e.target.id === 'enterC') runContest([...$('#mbody').querySelectorAll('.pick input:checked')].map(i => i.value));
+  if (e.target.closest('#enterCB')) { const ids = [...$('#mbody').querySelectorAll('.pick input:checked')].map(i => i.value); if (!ids.length) return toast('เลือกพระอย่างน้อย 1 องค์', 'bad'); confirmGrey('ติดสินบนกรรมการประกวด', `จ่ายเพิ่ม ${fmt(BRIBE_COST)} ให้กรรมการ คะแนนพระของคุณ +15 แต่กรรม +20 และอาจโดนแฉ`, () => { closeModal(); runContest(ids, true); }); }
   if (e.target.id === 'makeB') makeBatch();
   const stp = e.target.closest('[data-step]'); if (stp && !stp.disabled) { TF.step = +stp.dataset.step; reModal(templeHTML()); return; }
   if (e.target.id === 'diceBtn') { const n = randomNick(); const inp = $('#nick'); if (inp) inp.value = n; onNick(n); return; }
@@ -1262,7 +1299,7 @@ $('#mbody').addEventListener('click', e => {
   if (e.target.id === 'tutBtn') { restartTut(); return; }
   if (e.target.id === 'soundBtn') { S.mute = !S.mute; save(); openModal(menuHTML()); sfx('buy'); }
   if (e.target.id === 'resetBtn') openModal(`<h2>เริ่มเกมใหม่?</h2><p>เงิน เลเวล และพระในตู้ทั้งหมดจะหายไป</p><div class="row"><button class="btn dim" data-close>ยกเลิก</button><button class="btn no" id="resetYes">ยืนยัน เริ่มใหม่</button></div>`);
-  if (e.target.id === 'resetYes') { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); normEndgame(S); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
+  if (e.target.id === 'resetYes') restartGame();
 });
 $('#mbody').addEventListener('change', e => {
   const bf = e.target.dataset.bkf; if (bf) { BK[bf] = e.target.value; const l = $('#bkList'); if (l) { l.innerHTML = bookList(); fillThumbs(l); } return; }
@@ -1280,6 +1317,8 @@ $('#chips').addEventListener('click', e => {
   if (e.target.closest('#clBtn')) { CL.open = !CL.open; renderChips(); }
   if (e.target.closest('#askBtn')) askTeacher();
   if (e.target.closest('#shakeBtn')) shakePiece();
+  if (e.target.closest('#certBtn')) checkCert();
+  if (e.target.closest('#dressBtn')) dressPiece();
   if (e.target.closest('#frameBtn')) toggleFrame();
   checkTut();
 });
@@ -1289,6 +1328,12 @@ $('#clp').addEventListener('click', e => {
   if (CL.marks[k] === v) { const { [k]: _, ...rest } = CL.marks; CL.marks = rest; } else CL.marks[k] = v; renderChips(); checkTut();
 });
 document.addEventListener('click', e => { const eg = e.target.closest('[data-eg]'); if (eg && !eg.disabled) { egClick(eg); return; } });
+document.addEventListener('click', e => {
+  const kb = e.target.closest('[data-k]'); if (kb && !kb.disabled) { kClick(kb); return; }
+  if (e.target.closest('#rumorBtn')) openModal(rumorHTML());
+  if (e.target.closest('#donateBtn')) openModal(donateHTML());
+  if (e.target.closest('#endBookBtn')) openModal(endingBookHTML());
+});
 document.addEventListener('click', e => { if (e.target.id === 'tutSkip') { S.tut.on = false; save(); checkTut(); toast('ข้ามบทเรียนแล้ว เปิดดูใหม่ได้จากเมนู ≡'); } });
 $('#spotbar').addEventListener('click', e => {
   if (e.target.id === 'spotSkip' && spotting() && !spot.busy) finishPass(S.queue[0]);
@@ -1302,6 +1347,8 @@ const DEBUG_ACTS = {
   xp: ['+1,000 XP', () => { gainXP(1000); }],
   rep: ['+20 ชื่อเสียง', () => { S.rep = Math.min(100, S.rep + 20); }],
   day: ['ข้ามวัน', () => { closeModal(); endDay(); }],
+  merit: ['+50 บุญ', () => { addMerit(50); }],
+  karma: ['+50 กรรม', () => { addKarma(50); }],
   star: ['+5,000 XP', () => { gainXP(5000); }],
   clue: ['+1 เบาะแส', () => { const t = addClue('โหมดทดสอบ'); toast(t || 'ยังไม่ถึง Lv.6 หรือเบาะแสครบแล้ว'); }],
   auc: ['เปิดงานประมูลวันนี้', () => { S.auction.force = S.day; S.auction.day = 0; }],

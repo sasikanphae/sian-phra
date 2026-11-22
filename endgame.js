@@ -111,7 +111,7 @@ function duelHTML() {
   const st = S().duel, done = st.day === S().day;
   return `<h2>ดวลส่องพระ</h2><p class="note">พระ 5 องค์ เวลา 60 วินาที ตอบแท้/เก๊ให้ถูกมากกว่าคู่แข่ง (เสมอกันดูเวลา) เดิมพัน ${fmt(duelStake())} • ชนะคนเดิมครบ 3 ครั้ง ลูกค้าประจำของเขาจะย้ายมาร้านคุณ${huntOn() ? ' • ชนะมีโอกาสได้เบาะแสพระในตำนาน' : ''}</p>
     ${done ? '<p class="badge">วันนี้ดวลไปแล้ว พรุ่งนี้มาใหม่</p>' : ''}<div class="opts">` +
-    RIVALS.map(r => `<button class="btn opt" data-eg="duel:${r.id}" ${done || S().money < duelStake() ? 'disabled' : ''}><b>${esc(r.name)}</b><small>${esc(r.note)} • ชนะไปแล้ว ${st.wins[r.id] || 0} ครั้ง${st.regs[r.id] ? ' • ลูกค้าประจำย้ายมาแล้ว' : ''}</small></button>`).join('') + `</div>${backBtn()}`;
+    RIVALS.map(r => { const wk = ((st.weak || {})[r.id] || 0) >= S().day; return `<div class="rvrow"><button class="btn opt" data-eg="duel:${r.id}" ${done || S().money < duelStake() ? 'disabled' : ''}><b>${esc(r.name)}${wk ? ' (เสียสมาธิอยู่)' : ''}</b><small>${esc(r.note)} • ชนะไปแล้ว ${st.wins[r.id] || 0} ครั้ง${st.regs[r.id] ? ' • ลูกค้าประจำย้ายมาแล้ว' : ''}</small></button><button class="btn grey rvatk" data-eg="attack:${r.id}" ${wk ? 'disabled' : ''}>ปล่อยข่าวโจมตี<small>สายเทา</small></button></div>`; }).join('') + `</div>${backBtn()}`;
 }
 function startDuel(rid) {
   const st = S().duel, rv = RIVALS.find(x => x.id === rid); if (!rv || st.day === S().day || S().money < duelStake()) return;
@@ -124,8 +124,9 @@ function duelAnswer(g) { if (!DU || DU.over) return; DU.ans.push(g === DU.items[
 function finishDuel(forfeit) {
   if (!DU || DU.over) return; DU.over = true;
   const me = DU.ans.filter(Boolean).length, t = Math.round(60 - duelLeft()), r = rng(hash('rv:' + S().day + DU.rv.id));
-  let rc = 0; for (let i = 0; i < 5; i++) if (r() < DU.rv.acc) rc++;
-  const rt = Math.round(DU.rv.time * (.8 + r() * .4)), win = !forfeit && (me > rc || (me === rc && t < rt)), st = S().duel;
+  let rc = 0;
+  const weak = ((S().duel.weak || {})[DU.rv.id] || 0) >= S().day; rc = 0; for (let i = 0; i < 5; i++) if (r() < DU.rv.acc - (weak ? .18 : 0)) rc++;
+  const rt = Math.round((DU.rv.time + (weak ? 12 : 0)) * (.8 + r() * .4)), win = !forfeit && (me > rc || (me === rc && t < rt)), st = S().duel;
   let extra = '';
   if (win) {
     S().money += DU.stake; S().rep = Math.min(100, S().rep + 3); st.total++; st.wins[DU.rv.id] = (st.wins[DU.rv.id] || 0) + 1; A.gainXP(40);
@@ -326,18 +327,8 @@ function endgameDay(lines) {
   if (aucOn() && (s.day + 1) % 5 === 0) lines.push(['gold', 'พรุ่งนี้มีงานประมูลพระ (เปิดจากเมนู ≡ → เป้าหมาย)']);
 }
 
-/* ===== ฉากจบ (เฟส 3: ผู้พิทักษ์ตำนาน, นายกสมาคม) ===== */
-const ENDINGS = { legend: ['ผู้พิทักษ์ตำนาน', 'คุณตามล่าพระในตำนานได้ครบทั้ง 5 องค์ ทั้งวงการต่างยกให้เป็นผู้พิทักษ์ตำนาน'], pres: ['นายกสมาคม', `คุณได้รับเลือกเป็นนายก${ASSOC} เสียงปรบมือดังทั่วศาลาวัด`] };
-// ฉากจบรอให้หน้าต่างที่เปิดอยู่ (เช่น สรุปวัน) ปิดก่อน แล้วค่อยแสดง
-const PEND = [];
-function queueEnding(id) { if (!PEND.includes(id)) PEND.push(id); setTimeout(() => { if (document.getElementById('modal').hidden) popEnding(); }, 0); }
-function popEnding() { const id = PEND.shift(); if (id) { showEnding(id); return true; } return false; }
-function showEnding(id) {
-  const s = S(); s.endings[id] = s.endings[id] || s.day; A.save(); const [t, d] = ENDINGS[id];
-  const share = `เซียนพระ จำลอง: ฉากจบ "${t}" วันที่ ${s.day} ${starTxt(stars())} ชื่อเสียง ${s.rep}`;
-  A.openModal(`<div class="announce"><p class="big">ฉากจบ: ${esc(t)}</p><p>${esc(d)}</p><ul class="log"><li>วันที่ ${s.day} • เงิน ${fmt(s.money)} • ชื่อเสียง ${s.rep}</li><li>บารมี ${starTxt(stars()) || '★0'} ${esc(starTitle(stars()))}</li><li>พระในตำนาน ${legendsOwned()}/5 • ชนะดวล ${s.duel.total} ครั้ง</li></ul>
-    <div class="row"><button class="btn" data-eg="copyend" data-share="${esc(share)}">คัดลอกไปแชร์</button><button class="btn ok" data-close>เล่นต่อ</button></div></div>`);
-}
+/* ===== ฉากจบ: ใช้ระบบกลางใน karma.js ผ่าน A.queueEnding ===== */
+const queueEnding = id => A.queueEnding(id);
 
 /* ===== หน้าเป้าหมาย ===== */
 const backBtn = () => `<div class="row"><button class="btn dim" data-eg="goals">← เป้าหมาย</button></div>`;
@@ -353,13 +344,14 @@ function goalsHTML() {
     row('สาขาและลูกศิษย์', L >= 6 ? `สาขา ${s.branches.length}/3` : 'ปลดล็อกที่ Lv.6', bar(s.branches.length / 3, `${s.branches.length}/3`), 'branches', 'จัดการสาขา', L < 6) +
     row('พิพิธภัณฑ์พระ', L >= 6 ? (s.museum.open ? `คะแนน ${museumScore().total} • ตู้ ${s.museum.items.length}/${s.museum.cases}` : `สร้างได้ด้วยเงิน ${fmt(MUSEUM_COST)}`) : 'ปลดล็อกที่ Lv.6', null, 'museumpage', 'ไปพิพิธภัณฑ์', L < 6) +
     row(`นายก${ASSOC}`, s.assoc.pres ? 'คุณเป็นนายกสมาคมแล้ว' : n >= 5 ? (s.assoc.cand ? `ลงสมัครแล้ว เลือกตั้งวันที่ ${nextVote()}` : 'ลงสมัครได้แล้ว') : 'ต้องมีบารมี ★5', null, 'assoc', 'ดูสมาคม', false) +
-    row('ฉากจบที่ปลดล็อก', Object.keys(ENDINGS).map(k => s.endings[k] ? `✓ ${ENDINGS[k][0]}` : '???').join(' • '), null);
+    row('ฉากจบที่ปลดล็อก', A.endingsLine(), null);
 }
 // ปุ่มในหน้าต่าง ๆ ของโมดูลนี้ (data-eg) — คืน true ถ้าจัดการแล้ว
 function egClick(el) {
   const [a, v] = el.dataset.eg.split(':');
   const pages = { goals: goalsHTML, legend: legendHTML, duelpage: duelHTML, branches: branchHTML, museumpage: museumHTML, assoc: assocHTML };
   if (pages[a]) { A.openModal(pages[a]()); return true; }
+  if (a === 'attack') { const rv = RIVALS.find(x => x.id === v); if (rv) A.attackRival(rv.id, rv.name); return true; }
   if (a === 'buyclue') buyClue(); else if (a === 'duel') startDuel(v); else if (a === 'auction') startAuction();
   else if (a === 'branch') openBranch(v); else if (a === 'train') train(v);
   else if (['museum', 'mcase', 'min', 'mout'].includes(a)) museumAct(a, v); else if (a === 'cand') assocAct();
@@ -370,5 +362,5 @@ function egClick(el) {
 
 export {
   initEndgame, normEndgame, stars, starTitle, starTxt, starMult, starPatience, starProgress, LEGENDS, legendById, legendsOpen, legendsOwned, addClue, onCustomerDone, markOwned, legendCustomer,
-  RIVALS, duelOn, aucOn, aucToday, modePiece, modeKey, modeCard, modeActs, modeQinfo, modeAct, leaveMode, egTick, onSpotHit, endgameDay, goalsHTML, egClick, showEnding, popEnding, museumScore, CATS, REGIONS,
+  RIVALS, duelOn, aucOn, aucToday, modePiece, modeKey, modeCard, modeActs, modeQinfo, modeAct, leaveMode, egTick, onSpotHit, endgameDay, goalsHTML, egClick, museumScore, CATS, REGIONS,
 };
