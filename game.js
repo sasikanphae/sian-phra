@@ -20,11 +20,11 @@ const MATS = {
   silver: { name: 'เนื้อเงิน', base: [196, 196, 198], dark: [52, 52, 58], hi: [250, 250, 250], rough: .3, metal: .95, patina: [90, 80, 70] },
   lead:   { name: 'เนื้อตะกั่ว', base: [118, 120, 124], dark: [38, 38, 42], hi: [184, 186, 190], rough: .62, metal: .55, patina: [206, 202, 188] },
 };
-const THW = { thin: .07, mid: .11, thick: .17 };
+const THW = { thin: .055, mid: .11, thick: .19 };
 const TELLS = {
   hand:   { label: 'ปางพระหัตถ์', opts: ['mara', 'samadhi'], txt: { mara: 'ปางมารวิชัย: มือขวาวางคว่ำที่เข่า', samadhi: 'ปางสมาธิ: มือวางซ้อนกันบนตัก' } },
   flame:  { label: 'พระเกศ', opts: ['tall', 'short'], txt: { tall: 'เกศยาวเรียวแหลม', short: 'เกศสั้นป้อม' } },
-  tiers:  { label: 'ฐานชั้น', num: [2, 4], txt: v => v + ' ชั้น' },
+  tiers:  { label: 'ฐานชั้น', num: [1, 5], txt: v => v + ' ชั้น' },
   petals: { label: 'กลีบบัวที่ฐาน', num: [4, 11], txt: v => v + ' กลีบ' },
   dots:   { label: 'เม็ดไข่ปลารอบซุ้ม', num: [9, 19], txt: v => v + ' เม็ด' },
   back:   { label: 'ด้านหลัง', opts: ['plain', 'circle', 'square', 'yantra'], txt: { plain: 'หลังเรียบ มีรอยลายนิ้วมือ', circle: 'ตราประทับวงกลม', square: 'ตราประทับสี่เหลี่ยม', yantra: 'ยันต์ 3 แถว' } },
@@ -225,7 +225,7 @@ function drawFigure(x, f, spec) {
   dome(x, cx - s * .098, by - s * .63, s * .022, s * .065, 150, .5); dome(x, cx + s * .098, by - s * .63, s * .022, s * .065, 150, .5);
   dome(x, cx, by - s * .645, s * .09, s * .11, 215, .55);
   dome(x, cx, by - s * .75, s * .065, s * .05, 205, .5);
-  const tall = spec.flame === 'tall', top = tall ? s * 1.02 : s * .87, w = tall ? s * .024 : s * .04, b0 = by - s * .78;
+  const tall = spec.flame === 'tall', top = tall ? s * 1.1 : s * .82, w = tall ? s * .02 : s * .05, b0 = by - s * .78;
   const gr = x.createLinearGradient(0, by - top, 0, b0); gr.addColorStop(0, g(150)); gr.addColorStop(1, g(205));
   x.fillStyle = gr; x.beginPath(); x.moveTo(cx - w, b0); x.quadraticCurveTo(cx - w * .5, (b0 + by - top) / 2, cx, by - top); x.quadraticCurveTo(cx + w * .5, (b0 + by - top) / 2, cx + w, b0); x.closePath(); x.fill();
 }
@@ -324,12 +324,12 @@ function makeFace(m, spec, cond, seed, res, side, D) {
   if (grain === 'pores') {
     for (let k = 0, n = Math.round(2600 * res * res); k < n; k++) {
       const px = Math.floor(r() * W), py = Math.floor(r() * H), rad = r() < .8 ? 1 : 2;
-      for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) { if (dx * dx + dy * dy > rad * rad) continue; const xx = px + dx, yy = py + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue; const j = yy * W + xx; h[j] = Math.max(0, h[j] - .035); det[j] = 1; }
+      for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) { if (dx * dx + dy * dy > rad * rad) continue; const xx = px + dx, yy = py + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue; const j = yy * W + xx; h[j] = Math.max(0, h[j] - .055); det[j] = 1; }
     }
   } else if (grain === 'crackle') {
-    const cc = mk(W, H), cx2 = cc.getContext('2d', { willReadFrequently: true }); cx2.strokeStyle = '#fff'; cx2.lineWidth = Math.max(1, 1.3 * res);
+    const cc = mk(W, H), cx2 = cc.getContext('2d', { willReadFrequently: true }); cx2.strokeStyle = '#fff'; cx2.lineWidth = Math.max(1, 1.7 * res);
     for (let k = 0; k < 46; k++) { let px = r() * W, py = r() * H, a = r() * 6.28; cx2.beginPath(); cx2.moveTo(px, py); for (let s = 0, n = 12 + r() * 40; s < n; s++) { a += (r() - .5) * 1.1; px += Math.cos(a) * 6 * res; py += Math.sin(a) * 6 * res; cx2.lineTo(px, py); } cx2.stroke(); }
-    const cr = chan(cc); for (let i = 0; i < N; i++) if (cr[i] > .3) { det[i] = 2; h[i] = Math.max(0, h[i] - .02 * cr[i]); }
+    const cr = chan(cc); for (let i = 0; i < N; i++) if (cr[i] > .3) { det[i] = 2; h[i] = Math.max(0, h[i] - .035 * cr[i]); }
   } else if (grain === 'oxide') {
     const ox = noise(W, H, 16, r), sp = noise(W, H, 70, r);
     for (let i = 0; i < N; i++) { const k = clamp((ox[i] - .6) * 7, 0, 1) * clamp((sp[i] - .45) * 4, 0, 1); if (k > .05) { det[i] = 3; oxA[i] = k; h[i] += .008 * k; } }
@@ -369,7 +369,7 @@ function makeFace(m, spec, cond, seed, res, side, D) {
     let col = [0, 1, 2].map(q => lerp(lerp(mat.base[q], mat.dark[q], k1), mat.hi[q], k2));
     if (mat.patina) col = col.map((c0, q) => lerp(c0, mat.patina[q], cav * .65 * v));
     if (m.gold && h[i] > .25 && hi[i] > .58) col = col.map((c0, q) => lerp(c0, [214, 168, 62][q], .78));
-    if (det[i] === 1) col = col.map(c0 => c0 * .55); else if (det[i] === 2) col = col.map(c0 => c0 * .52);
+    if (det[i] === 1) col = col.map(c0 => c0 * .4); else if (det[i] === 2) col = col.map(c0 => c0 * .38);
     else if (det[i] === 3) col = col.map((c0, q) => lerp(c0, [226, 222, 206][q], .62 * oxA[i]));
     if (ingI && ingI[i] >= 0) {
       const gI = ING[ingI[i]], I = INGR[gI.id], sh = I.kind === 'flake' || I.kind === 'metal' || I.kind === 'shiny' ? .75 + hi[i] * .7 : 1;
@@ -399,7 +399,7 @@ function buildAmulet(m, spec, cond, seed, res = 1) {
   const grp = new THREE.Group(), mat = MATS[m.mat], coin = m.shape === 'oval';
   const thick = coin ? .055 : THW[spec.thick || 'mid'], edge = coin ? 'coin' : (spec.edge || 'cut');
   const shape = new THREE.Shape(outlinePts(m.shape).map(([x, y]) => new THREE.Vector2(x - .5, (.5 - y) * 1.25)));
-  const bev = edge === 'cut' ? { s: .02, t: thick * .22, n: 1 } : edge === 'round' ? { s: .034, t: thick * .42, n: 7 } : { s: .012, t: thick * .3, n: 3 };
+  const bev = edge === 'cut' ? { s: .012, t: thick * .1, n: 1 } : edge === 'round' ? { s: .05, t: thick * .5, n: 8 } : { s: .012, t: thick * .3, n: 3 };
   const depth = Math.max(.002, thick - 2 * bev.t);
   const bg = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: bev.s, bevelThickness: bev.t, bevelSegments: bev.n, curveSegments: 24 });
   bg.translate(0, 0, -depth / 2);
@@ -463,7 +463,7 @@ const scene = setupScene(R), cam = new THREE.PerspectiveCamera(30, 1, .05, 50), 
 const V = { zoom: 1, zt: 1, px: 0, py: 0, vx: 0, vy: 0, drag: false, pan: false, spin: 0, reset: null };
 const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), qa = new THREE.Quaternion();
 const fitDist = () => { const t = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)); return Math.max(.8 / t, .68 / (t * cam.aspect)); };
-function resize() { const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return; R.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
+function resize() { const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return; R.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); if (typeof layoutCmp === 'function' && V.cmp) layoutCmp(); }
 const stageRO = new ResizeObserver(resize); stageRO.observe(stage);
 function rotBy(ax, ay) { qa.setFromAxisAngle(AY, ax); holder.quaternion.premultiply(qa); qa.setFromAxisAngle(AX, ay); holder.quaternion.premultiply(qa); }
 function panBy(dx, dy) { const k = fitDist() * V.zoom * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * 2 / (stage.clientHeight || 1); V.px = clamp(V.px - dx * k, -.7, .7); V.py = clamp(V.py + dy * k, -.8, .8); }
@@ -504,18 +504,35 @@ function applyUV() {
   });
 }
 function toggleUV() { V.uv = !V.uv; applyUV(); renderActs(); }
+// โหมดเทียบองค์ครู: องค์ครู (ref) อยู่ใน holder เดียวกับองค์ที่ส่อง จึงหมุน/ซูม/พลิกพร้อมกัน วาด 2 viewport ด้วย scissor บน renderer เดียว
+let ref = null, refKey = null, curArgs = null;
+function buildRef() { if (!curArgs) return; const m = curArgs[0]; if (ref && refKey === m.id) return; clearRef(); ref = buildAmulet(m, m.spec, 100, 4242, 1); ref.visible = false; holder.add(ref); refKey = m.id; }
+function clearRef() { if (ref) { holder.remove(ref); disposeGroup(ref); ref = null; refKey = null; } }
+const cmpRects = () => { const w = stage.clientWidth, h = stage.clientHeight; return innerHeight > innerWidth ? [{ x: 0, y: 0, w, h: h / 2 }, { x: 0, y: h / 2, w, h: h / 2 }] : [{ x: 0, y: 0, w: w / 2, h }, { x: w / 2, y: 0, w: w / 2, h }]; };
+function layoutCmp() {
+  const on = !!(V.cmp && cur); stage.classList.toggle('cmp', on); if (!on) return;
+  const [a, b] = cmpRects(), pos = (el, rc) => { el.style.left = rc.x + 8 + 'px'; el.style.top = rc.y + rc.h - 34 + 'px'; };
+  pos($('#cmpA'), a); pos($('#cmpB'), b);
+  const d = $('#cmpDiv'); Object.assign(d.style, b.x ? { left: b.x - 1 + 'px', top: '0', width: '2px', height: '100%' } : { left: '0', top: b.y - 1 + 'px', width: '100%', height: '2px' });
+}
+function toggleCmp() { if (!cur) return; V.cmp = !V.cmp; if (V.cmp) buildRef(); layoutCmp(); renderActs(); }
+function setCam(aspect) { cam.aspect = aspect; cam.updateProjectionMatrix(); cam.position.set(V.px, V.py, fitDist() * V.zoom); }
 function showAmulet(m, spec, cond, seed) {
-  clearAmulet();
-  cur = buildAmulet(m, spec, cond, seed, 1); holder.add(cur); applyUV();
+  clearAmulet(); curArgs = [m, spec, cond, seed];
+  cur = buildAmulet(m, spec, cond, seed, 1); holder.add(cur); applyUV(); if (V.cmp) buildRef(); layoutCmp();
   holder.quaternion.identity(); rotBy(-.9, .12); V.vx = .03; V.vy = -.002; V.zt = 1; V.zoom = 1.25; V.px = V.py = 0; V.reset = null; V.spin = 0;
 }
-function clearAmulet() { if (cur) { holder.remove(cur); disposeGroup(cur); cur = null; } }
+function clearAmulet() { if (cur) { holder.remove(cur); disposeGroup(cur); cur = null; } curArgs = null; clearRef(); layoutCmp(); }
 const RC = new THREE.Raycaster(), NDC = new THREE.Vector2();
 function inPoly(x, y, P) { let o = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) o = !o; } return o; }
 // ยิง ray จากจุดที่แตะไปที่องค์พระ คืนส่วนที่โดน (front/back พร้อมพิกัด canvas, body, loop)
 function pickPart(cx, cy) {
   if (!cur) return null;
-  const rc = canvas.getBoundingClientRect(); NDC.set((cx - rc.left) / rc.width * 2 - 1, -(cy - rc.top) / rc.height * 2 + 1);
+  const rc = canvas.getBoundingClientRect();
+  if (V.cmp && ref) { // แตะได้เฉพาะฝั่งองค์ที่ส่อง
+    const a = cmpRects()[0], lx = cx - rc.left - a.x, ly = cy - rc.top - a.y; if (lx < 0 || ly < 0 || lx > a.w || ly > a.h) return null;
+    NDC.set(lx / a.w * 2 - 1, -ly / a.h * 2 + 1); setCam(a.w / a.h);
+  } else NDC.set((cx - rc.left) / rc.width * 2 - 1, -(cy - rc.top) / rc.height * 2 + 1);
   holder.updateMatrixWorld(); RC.setFromCamera(NDC, cam);
   for (const h of RC.intersectObjects(cur.children, true)) {
     const part = h.object.userData.part; if (!part) continue;
@@ -578,10 +595,19 @@ function frame() {
   else if (!V.drag && Math.abs(V.vx) + Math.abs(V.vy) > 1e-5) { rotBy(V.vx, V.vy); V.vx *= .93; V.vy *= .93; }
   V.zoom += (V.zt - V.zoom) * .18;
   if (V.zt >= .99 && !V.drag) { V.px *= .88; V.py *= .88; }
-  cam.position.set(V.px, V.py, fitDist() * V.zoom);
-  $('#loupe').style.opacity = V.zoom < .5 ? 1 : 0;
-  tickHL(); R.render(scene, cam);
+  $('#loupe').style.opacity = V.zoom < .5 && !V.cmp ? 1 : 0;
+  tickHL(); if (++tutTick % 8 === 0) checkTut();
+  const W = stage.clientWidth, H = stage.clientHeight;
+  if (V.cmp && ref && cur) {
+    R.setScissorTest(true);
+    for (const [g, rc] of [[cur, cmpRects()[0]], [ref, cmpRects()[1]]]) {
+      cur.visible = g === cur; ref.visible = g === ref;
+      R.setViewport(rc.x, H - rc.y - rc.h, rc.w, rc.h); R.setScissor(rc.x, H - rc.y - rc.h, rc.w, rc.h); setCam(rc.w / rc.h); R.render(scene, cam);
+    }
+    R.setScissorTest(false); R.setViewport(0, 0, W, H); cur.visible = true; ref.visible = false;
+  } else { setCam(W / (H || 1)); R.render(scene, cam); }
 }
+let tutTick = 0;
 
 /* ================= thumbnails (second renderer) ================= */
 let TR = null, TS = null, TC = null; const THUMB = new Map(), jobs = [];
@@ -599,6 +625,7 @@ const PVA = new Map();
 function fillThumbs(root) {
   root.querySelectorAll('[data-thumb]').forEach(el => {
     const [kind, id] = el.dataset.thumb.split(':');
+    if (kind === 'x') { const a = XA.get(id); if (a) thumbLater('x:' + id, [...a, ['front']], urls => { el.src = urls[0]; }); return; }
     if (kind === 'pv') { const a = PVA.get(id); if (a) thumbLater('pv:' + id, [a[0], a[1], 100, 4242, ['front', 'back']], urls => { el.querySelectorAll('img').forEach((im, i) => im.src = urls[i]); }); return; }
     if (kind === 'm') { const m = modelById(id); thumbLater('m:' + id, [m, m.spec, 100, 4242, ['front', 'back', 'side']], urls => { el.querySelectorAll('img').forEach((im, i) => im.src = urls[i]); }); }
     else { const it = S.inv.find(i => String(i.id) === id); if (it) thumbLater('i:' + id, [modelById(it.modelId), it.spec, it.cond, it.seed, ['front']], urls => { el.src = urls[0]; }); }
@@ -644,11 +671,12 @@ function sfx(name) { const a = audio(); if (!a || !SFX[name]) return; try { SFX[
 
 /* ================= state ================= */
 const KEY = 'sianphra_v1';
-function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 }, tools: {}, loan: { amt: 0, day: 0 }, shareBan: 0, trust: {}, templeBan: {}, recipes: {}, kaka: false }; }
+function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 }, tools: {}, loan: { amt: 0, day: 0 }, shareBan: 0, trust: {}, templeBan: {}, recipes: {}, kaka: false, ask: { day: 0, used: 0 }, tut: { on: true, step: 0 } }; }
 let S = null; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
 if (!S || S.v !== 1) { S = newGame(); }
 S.stats.spotted = S.stats.spotted || 0; S.tools = S.tools || {};
 S.loan = S.loan || { amt: 0, day: 0 }; S.shareBan = S.shareBan || 0;
+S.ask = S.ask || { day: 0, used: 0 }; S.tut = S.tut || { on: false };
 // จัดสร้าง: ความไว้ใจวัด, วัดที่แบน, ตำรับที่พบ, ดินกากยายักษ์ และค่าเริ่มต้นของ batch จากเซฟเก่า (hype 30 heat 0)
 function normTemple() {
   S.trust = S.trust || {}; for (const t of TEMPLES) if (S.trust[t.id] == null) S.trust[t.id] = 50;
@@ -678,12 +706,17 @@ function gramsOf(o) {
   const f = w === 'light' ? 1 - (.12 + r() * .13) : w === 'heavy' ? 1 + (.12 + r() * .13) : 1 + (r() * 2 - 1) * .03;
   return Math.round(mWeight(m) * f * 10) / 10;
 }
-function mutate(spec, n, r) {
+// tier: 'easy' = ตัวเลขต่าง ≥ 2 (dots ≥ 4) ถ้าช่วงค่าเอื้อ, 'fine' = ต่างได้แค่ 1 (รวม dots), ไม่ระบุ = ปกติ
+function mutate(spec, n, r, tier) {
   const s = { ...spec }, ks = Object.keys(s).map(k => [k, r()]).sort((a, b) => a[1] - b[1]).map(a => a[0]).slice(0, n);
   for (const k of ks) {
     const T = TELLS[k];
     if (T.mut) { s[k] = T.mut(r, s[k]); continue; }
-    if (T.num) { let d = (1 + Math.floor(r() * 2)) * (r() < .5 ? -1 : 1) * (k === 'dots' ? 2 : 1); let v = clamp(s[k] + d, T.num[0], T.num[1]); if (v === spec[k]) v = spec[k] + (spec[k] < T.num[1] ? 1 : -1); s[k] = v; }
+    if (T.num) {
+      const mag = tier === 'easy' ? (2 + Math.floor(r() * 2)) * (k === 'dots' ? 2 : 1) : tier === 'fine' ? 1 + Math.floor(r() * 2) : (1 + Math.floor(r() * 2)) * (k === 'dots' ? 2 : 1);
+      const sg = r() < .5 ? -1 : 1, a1 = clamp(spec[k] + sg * mag, T.num[0], T.num[1]), a2 = clamp(spec[k] - sg * mag, T.num[0], T.num[1]);
+      let v = Math.abs(a1 - spec[k]) >= Math.abs(a2 - spec[k]) ? a1 : a2; if (v === spec[k]) v = spec[k] + (spec[k] < T.num[1] ? 1 : -1); s[k] = v;
+    }
     else s[k] = pick(r, T.opts.filter(o => o !== s[k]));
   }
   return s;
@@ -693,6 +726,16 @@ function fakeOwn(spec, r) {
   const s = mutate(spec, Math.min(1 + Math.floor(r() * 2), Object.keys(spec).length), r);
   if (spec.ingr && s.ingr === spec.ingr) s.ingr = mutIngr(r, spec.ingr);
   if (spec.code === 'stamp' && s.code === 'stamp') s.code = r() < .7 ? 'none' : 'wrong';
+  return s;
+}
+// Lv.1–2: ของเก๊ผิดแบบเห็นชัด ต้องมีจุดผิดที่เห็นจากด้านหน้าอย่างน้อย 1 จุด (จึงไม่มีทางผิดแค่ผิวเนื้ออย่างเดียว)
+const FRONT_KEYS = ['hand', 'flame', 'tiers', 'petals', 'dots', 'palm'];
+function easyFake(spec, n, r) {
+  let s = mutate(spec, n, r, 'easy');
+  if (!Object.keys(spec).some(k => FRONT_KEYS.includes(k) && s[k] !== spec[k])) {
+    const fk = Object.keys(spec).filter(k => FRONT_KEYS.includes(k));
+    if (fk.length) { const k = pick(r, fk); s = { ...s, ...mutate({ [k]: spec[k] }, 1, r, 'easy') }; }
+  }
   return s;
 }
 function makeCustomer(r, L) {
@@ -715,14 +758,15 @@ function makeCustomer(r, L) {
   const n = wpick(r, L <= 2 ? [[3, .6], [2, .4]] : L <= 4 ? [[3, .25], [2, .45], [1, .3]] : [[2, .45], [1, .55]]);
   // เก๊เทพ (Lv.3+): หน้าตาเหมือนองค์ครูทุกจุด ผิดแค่เนื้อเรซิ่นหรือน้ำหนัก
   const god = !genuine && L >= 3 && r() < (L >= 5 ? .3 : .15);
-  const spec = genuine ? { ...m.spec } : god ? { ...m.spec, ...(r() < .5 ? { resin: 'yes' } : { weight: r() < .5 ? 'light' : 'heavy' }) } : mutate(m.spec, Math.min(n, Object.keys(m.spec).length), r);
+  const nk = Math.min(n, Object.keys(m.spec).length);
+  const spec = genuine ? { ...m.spec } : god ? { ...m.spec, ...(r() < .5 ? { resin: 'yes' } : { weight: r() < .5 ? 'light' : 'heavy' }) } : L <= 2 ? easyFake(m.spec, nk, r) : mutate(m.spec, nk, r, L >= 5 ? 'fine' : undefined);
   const cond = Math.round(genuine ? 62 + r() * 38 : 72 + r() * 28);
   const market = m.price * cf(cond), ask = round100(market * (genuine ? .55 + r() * .6 : .45 + r() * .5));
   const honest = genuine ? r() < .65 : r() < .35;
   return { id: S.nextId++, name: pick(r, NAMES), line: pick(r, honest ? HONEST : SLICK), modelId: m.id, genuine, spec, cond, ask, patience: 1 + Math.floor(r() * 3), seed: Math.floor(r() * 1e9) };
 }
 function genQueue() { const r = rng(hash('d' + S.day + ':' + S.seed)), L = lvl(); S.queue = []; for (let i = 0, n = 4 + Math.floor(L / 2); i < n; i++) S.queue.push(makeCustomer(r, L)); }
-if (!S.queue.length && S.day === 1 && !S.inv.length) genQueue();
+if (!S.queue.length && S.day === 1 && !S.inv.length) { genQueue(); if (S.tut.on) S.queue.unshift(...tutCustomers()); }
 
 /* ================= modes & rendering ================= */
 let mode = 'shop', ownItem = null, lastShown = null;
@@ -733,7 +777,7 @@ function loadStage() {
   if (mode === 'own' && ownItem) { key = 'i' + ownItem.id; args = [modelById(ownItem.modelId), ownItem.spec, ownItem.cond, ownItem.seed]; }
   else if (mode === 'daily') { const it = DS[D.run.idx]; key = 'd' + D.run.date + ':' + D.run.idx; args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (S.queue[0]) { const c = S.queue[0]; key = 'c' + c.id; args = [modelById(c.modelId), c.spec, c.cond, c.seed]; }
-  if (key === lastShown) return; lastShown = key;
+  if (key === lastShown) return; lastShown = key; CL = { key, marks: {}, open: CL.open };
   if (args) showAmulet(...args); else clearAmulet();
 }
 function render() {
@@ -743,7 +787,7 @@ function render() {
   $('#xpfill').style.width = (Ln ? clamp((S.xp - Lc.xp) / (Ln.xp - Lc.xp), 0, 1) * 100 : 100) + '%';
   $('#rep').innerHTML = `${S.rep}<small>ชื่อเสียง</small>`;
   $('#day').innerHTML = `${S.day}<small>วันที่</small>`;
-  renderCard(); renderActs(); renderTabs(); loadStage(); renderSpotBar();
+  renderCard(); renderActs(); renderTabs(); loadStage(); renderSpotBar(); renderChips(); checkTut();
   $('#hint').textContent = spotting() ? 'แตะ = ชี้จุดที่ผิด • ลาก = หมุน' : HINT;
   const q = $('#qinfo'); q.innerHTML = '';
   if (mode === 'daily') q.innerHTML = `<span class="badge gold" id="dtimer">⏱ ${fmtTime(dElapsed())}</span>`;
@@ -791,7 +835,7 @@ function renderCard() {
 }
 // แถวบน = เครื่องมือส่อง, แถวล่าง = การตัดสินใจ (ไม่เกิน 4 ปุ่มต่อแถว อ่านง่ายบนจอ 360px)
 const tagsOf = it => (it.consign ? `<span class="badge cons">ฝากขาย • เหลือ ${it.consign.until - S.day} วัน</span>` : '') + (it.share ? '<span class="badge shr">หุ้น 50%</span>' : '');
-function toolBtns() { return `<button class="btn" data-a="book">สมุด</button><button class="btn" data-a="flip">พลิก</button><button class="btn" data-a="loupe">ส่อง</button>` + (S.tools.uv ? `<button class="btn uvb ${V.uv ? 'on' : ''}" data-a="uv" aria-pressed="${!!V.uv}">UV</button>` : ''); }
+function toolBtns() { return `<button class="btn" data-a="flip">พลิก</button><button class="btn" data-a="loupe">ส่อง</button><button class="btn ${V.cmp ? 'on' : ''}" data-a="cmp" aria-pressed="${!!V.cmp}">เทียบ</button>` + (S.tools.uv ? `<button class="btn uvb ${V.uv ? 'on' : ''}" data-a="uv" aria-pressed="${!!V.uv}">UV</button>` : ''); }
 function renderActs() {
   const el = $('#act'), rows = (a, b) => `<div class="ar">${a}</div>` + (b ? `<div class="ar">${b}</div>` : '');
   if (mode === 'own' && ownItem) {
@@ -822,7 +866,7 @@ function toast(msg, kind = '') { if ([...$('#toasts').children].some(t => t.text
 function nextCustomer() { S.queue.shift(); render(); }
 function negotiate() {
   const c = S.queue[0];
-  if (c.patience <= 0) { toast(`${c.name} ไม่พอใจที่โดนต่อราคามากไป เดินออกจากร้านแล้ว`, 'bad'); S.rejected.push({ modelId: c.modelId, genuine: c.genuine }); nextCustomer(); return; }
+  if (c.patience <= 0) { toast(`${c.name} ไม่พอใจที่โดนต่อราคามากไป เดินออกจากร้านแล้ว`, 'bad'); S.rejected.push({ modelId: c.modelId, genuine: c.genuine, spec: c.spec, cond: c.cond, seed: c.seed }); nextCustomer(); return; }
   c.patience--;
   if (Math.random() < (c.genuine ? .35 : .12)) c.line = 'ราคานี้ต่ำสุดแล้ว ลดไม่ได้จริง ๆ' + (c.patience ? '' : ' ถ้าต่ออีกผมกลับเลยนะ');
   else { c.ask = round100(c.ask * (1 - (.06 + Math.random() * .09))); c.line = `โอเค ๆ ลดให้เหลือ ${fmt(c.ask)} ก็แล้วกัน`; }
@@ -886,7 +930,7 @@ function doTurn(id) {
   if (!it.genuine && Math.random() < .7) {
     S.rep = Math.max(0, S.rep - 5); it.cert = false; it.xp = true; S.stats.fooled++;
     toast(`${c.name}ส่องแล้วจับได้ว่า ${m.name} ที่เอามาเทิร์นเป็นของเก๊! ชื่อเสียง −5 แล้วเดินออกจากร้าน`, 'bad');
-    S.rejected.push({ modelId: c.modelId, genuine: c.genuine }); nextCustomer(); return;
+    S.rejected.push({ modelId: c.modelId, genuine: c.genuine, spec: c.spec, cond: c.cond, seed: c.seed }); nextCustomer(); return;
   }
   S.money -= need; S.inv = S.inv.filter(x => x !== it); S.stats.bought++; takeItem(c);
   sfx('buy'); toast(`เทิร์น ${m.name} (${fmt(v)})${need ? ` + จ่ายเพิ่ม ${fmt(need)}` : ''} ได้พระองค์ใหม่เข้าตู้`, 'good'); nextCustomer();
@@ -902,11 +946,16 @@ const spotting = () => !!(spot && mode === 'shop' && S.queue[0] && S.queue[0].id
 function pass() {
   const c = S.queue[0]; if (!c || spot?.busy) return;
   if (c.pointed) { finishPass(c); return; }
+  const bad = Object.keys(CL.marks).filter(k => CL.marks[k] === 'bad');
+  if (CL.key === 'c' + c.id && bad.length) {
+    if (bad.length <= 2) { spot = { cid: c.id, busy: false }; commitSpot(bad); return; }
+    toast('ติ๊ก ✗ เกิน 2 ข้อ ระบบไม่นับเป็นการชี้จุด ลองชี้บนองค์พระแทน');
+  }
   spot = { cid: c.id, busy: false }; render();
 }
 function finishPass(c) {
   spot = null; if (S.queue[0] !== c) { render(); return; }
-  S.rejected.push({ modelId: c.modelId, genuine: c.genuine, pointed: c.pointed || null, hit: !!c.hit, wrong: c.genuine ? [] : wrongKeys(c.spec, modelById(c.modelId)) });
+  S.rejected.push({ modelId: c.modelId, genuine: c.genuine, spec: c.spec, cond: c.cond, seed: c.seed, pointed: c.pointed || null, hit: !!c.hit, wrong: c.genuine ? [] : wrongKeys(c.spec, modelById(c.modelId)) });
   nextCustomer();
 }
 function onTap(x, y) {
@@ -967,11 +1016,11 @@ function toShop() { pauseDaily(); mode = 'shop'; ownItem = null; render(); }
 function openOwn(it) { pauseDaily(); mode = 'own'; ownItem = it; closeModal(); render(); }
 
 function endDay() {
-  const lines = [], L0 = lvl();
+  const lines = [], L0 = lvl(), shows = [];
   for (const it of S.inv) if (it.pend) {
     it.pend = 0; it.cert = it.genuine; const m = modelById(it.modelId);
     if (it.genuine) { const x = it.xp ? 0 : revealXP(it); gainXP(x); lines.push(['good', `ผลตรวจ ${m.name}: แท้ ได้ใบรับรอง${x ? ` (+${x} XP)` : ''}`]); }
-    else { it.xp = true; gainXP(3); S.stats.fooled++; lines.push(['bad', `ผลตรวจ ${m.name}: ไม่แท้${it.consign ? ' (ของฝากขาย คืนเจ้าของได้)' : ` เสียเงินไป ${fmt(it.paid)}`}${shareFake(it)}`]); }
+    else { it.xp = true; gainXP(3); S.stats.fooled++; shows.push({ modelId: it.modelId, spec: it.spec, cond: it.cond, seed: it.seed, title: `โดนหลอก: ${m.name}` }); lines.push(['bad', `ผลตรวจ ${m.name}: ไม่แท้${it.consign ? ' (ของฝากขาย คืนเจ้าของได้)' : ` เสียเงินไป ${fmt(it.paid)}`}${shareFake(it)}`]); }
   }
   if (S.rejected.length) {
     const fakes = S.rejected.filter(x => !x.genuine).length, real = S.rejected.length - fakes; gainXP(fakes * 12);
@@ -982,6 +1031,7 @@ function endDay() {
       lines.push(['bad', x.genuine ? `${nm}: คุณชี้ว่า "${pt}" ผิด แต่องค์นี้เป็นของแท้` : `${nm}: คุณชี้ "${pt}" แต่จุดที่ผิดจริงคือ ${(x.wrong || []).map(k => `"${shortLabel(k)}"`).join(', ')}`]);
     }
   }
+  for (const x of S.rejected) if (x.genuine && x.spec) shows.push({ ...x, title: `ปฏิเสธองค์แท้: ${modelById(x.modelId).name}` });
   S.rejected = [];
   if (S.tlog.length) { lines.push(...S.tlog.map(([k, t]) => [k, 'กิจกรรมวันนี้: ' + t])); S.tlog = []; }
   for (const b of S.batches) dayBatch(b, lines);
@@ -1009,6 +1059,7 @@ function endDay() {
   S.day++; genQueue(); mode = 'shop'; ownItem = null;
   const lv = levelHTML();
   openModal(`<h2>สรุปวันที่ ${S.day - 1}</h2><ul class="log">${lines.map(([k, t]) => `<li class="${k}">${esc(t)}</li>`).join('')}</ul>${lv}
+    ${shows.length ? `<h3>เฉลยพร้อมภาพ</h3>${shows.slice(0, 4).map(revealCard).join('')}${shows.length > 4 ? `<p class="note">และอีก ${shows.length - 4} องค์</p>` : ''}` : ''}
     <p class="note">วันที่ ${S.day}: มีลูกค้ารอ ${S.queue.length} คน${lvl() >= 3 && S.day % 3 === 0 ? ' • วันนี้มีงานประกวดพระ' : ''}</p><div class="row"><button class="btn ok" data-close>เปิดร้าน</button></div>`);
   render();
 }
@@ -1059,6 +1110,101 @@ function levelHTML() {
   S.lvlSeen = L; save(); sfx('level');
   return `<h3>เลื่อนระดับเป็น Lv.${L} ${esc(LEVELS[L - 1].name)}!</h3><ul class="log">${h}</ul>`;
 }
+
+/* ================= guide: เช็กลิสต์ ถามอาจารย์ เฉลยพร้อมภาพ บทเรียน ================= */
+// องค์ที่กำลังส่อง (หน้าร้าน / ตู้ / ประจำวัน)
+function curPiece() {
+  if (mode === 'own' && ownItem) return ownItem;
+  if (mode === 'daily' && DS && D.run) return DS[D.run.idx];
+  return mode === 'shop' ? S.queue[0] || null : null;
+}
+// เช็กลิสต์: ผู้เล่นติ๊กเอง เกมไม่ช่วยตอบ ล้างเมื่อเปลี่ยนองค์ (ใน loadStage)
+let CL = { key: null, marks: {}, open: false };
+const CLM = { ok: '✓', bad: '✗', unk: '?' };
+function clHTML() {
+  const it = curPiece(); if (!it) return ''; const m = modelById(it.modelId);
+  return `<div class="clh"><b>เช็กลิสต์จุดสังเกต</b><button class="x clx" id="clClose" aria-label="ปิดเช็กลิสต์">×</button></div><p class="note">เทียบกับองค์ครูแล้วติ๊กเอง ✓ ตรง / ✗ ไม่ตรง / ? ไม่แน่ใจ${mode === 'shop' ? ' • ติ๊ก ✗ ไม่เกิน 2 ข้อแล้วกด "ไม่เอา" = ชี้จุดเก๊' : ''}</p>` +
+    specKeys(m).map(k => `<div class="clr"><div><b>${esc(shortLabel(k))}</b><small>องค์ครู: ${esc(k === 'weight' ? mWeight(m) + ' กรัม' : tellTxt(k, sv(m.spec, k)))}</small></div><div class="clb">${Object.entries(CLM).map(([v, ic]) => `<button class="${v} ${CL.marks[k] === v ? 'on' : ''}" data-cl="${k}:${v}" aria-label="${esc(shortLabel(k))} ${ic}" aria-pressed="${CL.marks[k] === v}">${ic}</button>`).join('')}</div></div>`).join('');
+}
+const askLeft = () => S.ask.day === S.day ? Math.max(0, 3 - S.ask.used) : 3;
+const askCost = () => 2000 * lvl();
+function renderChips() {
+  const el = $('#chips'), it = curPiece(), on = !!it && !spotting();
+  el.hidden = !on; $('#clp').hidden = !(on && CL.open);
+  if (!on) return;
+  const nm = Object.keys(CL.marks).length, canAsk = mode !== 'daily';
+  el.innerHTML = `<button class="chip" id="clBtn" aria-expanded="${CL.open}">เช็กลิสต์${nm ? ` ${nm}` : ''}</button>` + (canAsk ? `<button class="chip" id="askBtn">ถามอาจารย์<small>${it.teach ? 'ดูคำตอบเดิม' : askLeft() ? `เหลือ ${askLeft()} ครั้ง` : fmt(askCost())}</small></button>` : '');
+  if (CL.open) $('#clp').innerHTML = clHTML();
+}
+// ถามอาจารย์: บอกบริเวณกว้าง ๆ ไม่ฟันธงตรง ๆ
+const AREA = { flame: 'พระเกศเหนือเศียร', hand: 'แขนกับมือ', petals: 'ฐานใต้ตัก', tiers: 'ฐานใต้ตัก', dots: 'แนวเม็ดรอบซุ้ม', palm: 'มือที่ปิดหน้า', back: 'ด้านหลัง', code: 'ด้านหลังตรงโค้ด', edge: 'ขอบข้าง', thick: 'ด้านข้าง ดูความหนา', loop: 'หูเหรียญ', grain: 'ผิวเนื้อ ส่องใกล้ ๆ', ingr: 'เนื้อพระ ส่องหามวลสาร', resin: 'เนื้อพระ ลองใช้ไฟ UV', weight: 'น้ำหนัก ลองชั่งดู' };
+function askTeacher() {
+  const it = curPiece(); if (!it || mode === 'daily') return;
+  if (!it.teach) {
+    if (askLeft() > 0) { if (S.ask.day !== S.day) S.ask = { day: S.day, used: 0 }; S.ask.used++; }
+    else { const c = askCost(); if (S.money < c) { toast('เงินไม่พอค่าครู', 'bad'); return; } S.money -= c; }
+    const w = it.genuine ? [] : wrongKeys(it.spec, modelById(it.modelId));
+    it.teach = w.length ? { k: pick(Math.random, w) } : { k: null, unsure: Math.random() < .15 };
+    save();
+  }
+  const t = it.teach;
+  if (t.k) { toast(`🧓 อาจารย์: "ลองดูที่${AREA[t.k] || 'องค์พระ'}นะ"`); highlight(t.k, 2000); }
+  else toast(t.unsure ? '🧓 อาจารย์: "อันนี้อาจารย์ก็ไม่แน่ใจ ลองเทียบกับองค์ครูดูอีกทีนะ"' : '🧓 อาจารย์: "อาจารย์ดูแล้ว ไม่เห็นอะไรผิดสังเกต"');
+  render();
+}
+// เฉลยพร้อมภาพตอนสรุปวัน: องค์ที่โดนหลอกหรือปฏิเสธผิด
+const XA = new Map();
+function diffLines(spec, m) { return wrongKeys(spec, m).map(k => `${shortLabel(k)}: ${k === 'weight' ? tellTxt(k, sv(spec, k)) : tellTxt(k, sv(spec, k))} (ของแท้ ${k === 'weight' ? mWeight(m) + ' กรัม' : tellTxt(k, sv(m.spec, k))})`); }
+function revealCard(x) {
+  const m = modelById(x.modelId); if (!m || !x.spec) return '';
+  const ka = String(hash(JSON.stringify([x.modelId, x.spec, x.cond, x.seed]))), kb = 'ref' + hash(m.id);
+  XA.set(ka, [m, x.spec, x.cond, x.seed]); XA.set(kb, [m, m.spec, 100, 4242]);
+  const d = diffLines(x.spec, m);
+  return `<div class="rv"><b>${esc(x.title)}</b><div class="views rvv"><figure><img data-thumb="x:${ka}" alt="องค์นั้น"><figcaption>องค์นั้น</figcaption></figure><figure><img data-thumb="x:${kb}" alt="องค์ครู"><figcaption>องค์ครู (ของแท้)</figcaption></figure></div>
+    <ul class="rvd">${d.length ? d.map(t => `<li>${esc(t)}</li>`).join('') : '<li>องค์นี้แท้ ไม่มีจุดผิด ครั้งหน้าลองกด "เทียบ" ก่อนตัดสินใจ</li>'}</ul></div>`;
+}
+// บทเรียน: ลูกค้า 3 คนแรกของเกมใหม่เป็น "อาจารย์พาส่อง"
+function tutCustomers() {
+  const r = rng(hash('tut:' + S.seed + ':' + S.nextId)), np = modelById('nangpaya'), sd = modelById('somdej');
+  const mk = (i, m, genuine, line, spec) => ({ id: S.nextId++, tut: i, name: 'อาจารย์พาส่อง', line, modelId: m.id, genuine, spec: spec || { ...m.spec }, cond: 92, ask: round100(m.price * .45), patience: 3, seed: Math.floor(r() * 1e9) });
+  return [mk(1, np, false, 'มา ลองส่ององค์นี้กับอาจารย์ ทำตามลูกศรไปทีละขั้นนะ', { ...np.spec, back: 'circle', flame: 'tall' }),
+    mk(2, sd, true, 'องค์นี้ลองใช้ "เช็กลิสต์" ติ๊กเทียบกับองค์ครูทีละข้อดู', null),
+    mk(3, np, false, 'องค์สุดท้าย ถ้าดูไม่ออก กด "ถามอาจารย์" ได้นะ', { ...np.spec, thick: 'thin', edge: 'round' })];
+}
+const TUT = {
+  1: ['back', 'side', 'loupe', 'cmp', 'decide'], 2: ['checklist', 'decide'], 3: ['ask', 'decide'],
+};
+const TUTX = {
+  back: ['① ลากหมุนองค์พระไปดูด้านหลัง (หรือกด "พลิก")', '[data-a=flip]'],
+  side: ['② หมุนให้เห็นขอบข้าง ดูว่าหนาหรือบาง ขอบตัดหรือมน', null],
+  loupe: ['③ กด "ส่อง" เพื่อซูมดูผิวเนื้อใกล้ ๆ', '[data-a=loupe]'],
+  cmp: ['④ กด "เทียบ" ดูคู่กับองค์ครู (ของแท้) หมุนพร้อมกันทั้งสององค์', '[data-a=cmp]'],
+  checklist: ['กด "เช็กลิสต์" แล้วติ๊ก ✓ ✗ ? ทีละข้อเทียบกับองค์ครู', '#clBtn'],
+  ask: ['กด "ถามอาจารย์" ให้ช่วยชี้บริเวณที่น่าสงสัย (วันละ 3 ครั้งฟรี)', '#askBtn'],
+  decide: ['⑤ ตัดสินใจ: "รับเช่า" ถ้าคิดว่าแท้ หรือ "ไม่เอา" แล้วชี้จุดที่ผิด', '#act .ar:last-child'],
+};
+const FWD = new THREE.Vector3();
+function tutDone(st, c) {
+  FWD.set(0, 0, 1).applyQuaternion(holder.quaternion);
+  return st === 'back' ? FWD.z < -.05 : st === 'side' ? Math.abs(FWD.z) < .3 : st === 'loupe' ? V.zt < .6 : st === 'cmp' ? !!V.cmp
+    : st === 'checklist' ? Object.keys(CL.marks).length > 0 : st === 'ask' ? !!c.teach : false;
+}
+function checkTut() {
+  const co = $('#coach'), ar = $('#coachArrow'), c = S.queue[0];
+  document.querySelectorAll('.coach-tgt').forEach(e => e.classList.remove('coach-tgt'));
+  if (S.tut.on && !S.queue.some(q => q.tut)) { S.tut.on = false; save(); toast('จบบทเรียนแล้ว เปิดดูใหม่ได้จากเมนู ≡', 'good'); }
+  const show = S.tut.on && mode === 'shop' && c && c.tut && $('#modal').hidden && !spotting();
+  co.hidden = ar.hidden = !show; if (!show) return;
+  if (S.tut.cid !== c.id) { S.tut.cid = c.id; S.tut.step = 0; }
+  const steps = TUT[c.tut]; while (S.tut.step < steps.length - 1 && tutDone(steps[S.tut.step], c)) S.tut.step++;
+  const st = steps[S.tut.step], [txt, sel] = TUTX[st], sr = stage.getBoundingClientRect();
+  if (co.dataset.st !== c.id + st) { co.dataset.st = c.id + st; co.innerHTML = `<p>${esc(txt)}</p><button class="btn dim" id="tutSkip">ข้ามบทเรียน</button>`; }
+  co.style.top = sr.top + 8 + 'px'; co.style.left = sr.left + 8 + 'px'; co.style.width = Math.min(420, Math.max(200, sr.width - 150)) + 'px'; $('#qinfo').hidden = true;
+  const tg = sel && document.querySelector(sel);
+  if (tg) { tg.classList.add('coach-tgt'); const r = tg.getBoundingClientRect(); ar.textContent = '▼'; ar.style.left = r.left + r.width / 2 + 'px'; ar.style.top = r.top - 30 + 'px'; ar.className = 'coach-arrow'; }
+  else { ar.textContent = '⟲ ลากหมุน'; ar.style.left = sr.left + sr.width / 2 + 'px'; ar.style.top = sr.top + sr.height * .62 + 'px'; ar.className = 'coach-arrow drag'; }
+}
+function restartTut() { S.tut = { on: true, step: 0 }; S.queue.unshift(...tutCustomers()); mode = 'shop'; ownItem = null; spot = null; lastShown = null; closeModal(); render(); }
 
 /* ================= daily: ส่องพระประจำวัน ================= */
 // ทุกคนได้ 5 องค์ชุดเดียวกันตามวันที่เวลาไทย เซฟแยกใน DKEY ไม่แตะคิวลูกค้า/เงินในเกมหลัก
@@ -1419,11 +1565,12 @@ function menuHTML() {
   return `<h2>เมนู</h2>${dailyBtnHTML()}<h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
   ${S.loan.amt ? `<h3>หนี้เฮียโรงรับจำนำ</h3><p>คงเหลือ <b class="debtc">${fmt(S.loan.amt)}</b> • ดอกเบี้ย 3% ต่อวัน • ${loanLeftDays() > 0 ? `อีก ${loanLeftDays()} วันจะโดนยึดพระ` : 'ครบกำหนดแล้ว ปิดร้านวันนี้จะโดนยึดพระ'}</p>
   <div class="row"><button class="btn ok" id="repayBtn" ${S.money <= 0 ? 'disabled' : ''}>คืนเงิน ${fmt(Math.max(0, Math.min(S.money, S.loan.amt)))}${S.money < S.loan.amt ? '<small>(คืนได้เท่าที่มี)</small>' : ''}</button></div>` : ''}
-  <div class="row"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
+  <div class="row"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn" id="tutBtn">ดูบทเรียนอีกครั้ง</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
 }
 const HOW = `<h2>ยินดีต้อนรับสู่แผงพระของคุณ</h2>
 <ul class="log"><li>ลูกค้าจะนำพระมาเสนอให้เช่า ลากเพื่อหมุนองค์พระได้รอบ 360° ดูทั้งด้านหน้า ด้านหลัง และขอบข้าง</li>
-<li>เปิด <b>สมุด</b> เทียบกับองค์ครู: ปางพระหัตถ์ พระเกศ จำนวนกลีบบัว ฐานชั้น ด้านหลัง ความหนา และผิวเนื้อ ของเก๊จะผิดอย่างน้อย 1 จุด</li>
+<li>กด <b>เทียบ</b> เพื่อดูคู่กับองค์ครู (ของแท้) หมุนพร้อมกัน ใช้ <b>เช็กลิสต์</b> ติ๊กทีละจุด และ <b>ถามอาจารย์</b> ได้วันละ 3 ครั้ง (ครั้งต่อไปมีค่าครู)</li>
+<li>เปิด <b>สมุด</b> (แท็บล่าง) เทียบกับองค์ครู: ปางพระหัตถ์ พระเกศ จำนวนกลีบบัว ฐานชั้น ด้านหลัง ความหนา และผิวเนื้อ ของเก๊จะผิดอย่างน้อย 1 จุด</li>
 <li>กด <b>ส่อง</b> เพื่อซูมดูผิวใกล้ ๆ เหมือนใช้กล้องส่องพระ (ซูมแล้วลากสองนิ้ว หรือ Shift+ลาก เพื่อเลื่อนดู)</li>
 <li>ถ้ากด <b>ไม่เอา</b> ให้แตะจุดที่คิดว่าผิดบนองค์พระ (หรือเลือกจากรายการ) ถ้าองค์นั้นเก๊และชี้ถูก ได้ +20 XP ทันที</li>
 <li><b>ต่อราคา</b> ได้ แต่ถ้าต่อมากไปลูกค้าจะเดินหนี รับเช่าแล้วไปที่ <b>ตู้พระ</b> เพื่อส่งตรวจหรือปล่อยเช่าทำกำไร</li>
@@ -1439,7 +1586,7 @@ const HOW = `<h2>ยินดีต้อนรับสู่แผงพระ
 /* ================= event wiring ================= */
 $('#act').addEventListener('click', e => {
   const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
-  ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, uv: toggleUV, dyes: () => dailyAnswer(true), dno: () => dailyAnswer(false), dnext: dailyNext, dexit: toShop, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
+  ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, uv: toggleUV, cmp: toggleCmp, dyes: () => dailyAnswer(true), dno: () => dailyAnswer(false), dnext: dailyNext, dexit: toShop, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
      back: toShop, cert: () => certify(ownItem), sell: () => sell(ownItem), scrap: () => scrap(ownItem) })[a]?.();
 });
 $('#tabs').addEventListener('click', e => {
@@ -1469,9 +1616,10 @@ $('#mbody').addEventListener('click', e => {
   if (e.target.id === 'recipeBtn') { openModal(recipeHTML()); return; }
   if (e.target.id === 'bookBack') { openModal(bookHTML()); return; }
   if (e.target.id === 'howBtn') openModal(HOW);
+  if (e.target.id === 'tutBtn') { restartTut(); return; }
   if (e.target.id === 'soundBtn') { S.mute = !S.mute; save(); openModal(menuHTML()); sfx('buy'); }
   if (e.target.id === 'resetBtn') openModal(`<h2>เริ่มเกมใหม่?</h2><p>เงิน เลเวล และพระในตู้ทั้งหมดจะหายไป</p><div class="row"><button class="btn dim" data-close>ยกเลิก</button><button class="btn no" id="resetYes">ยืนยัน เริ่มใหม่</button></div>`);
-  if (e.target.id === 'resetYes') { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); genQueue(); mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
+  if (e.target.id === 'resetYes') { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
 });
 $('#mbody').addEventListener('change', e => {
   const k = e.target.dataset.tf; if (k) { if (k === 'seq') setSeq(e.target.value); else TF[k] = k === 'qty' || k === 'keep' ? +e.target.value : e.target.value; if (k === 'seq' && !e.target.value) TF.seq = ''; reModal(templeHTML()); }
@@ -1481,6 +1629,17 @@ $('#mbody').addEventListener('change', e => {
 });
 $('#menuBtn').onclick = () => openModal(menuHTML());
 $('#mbody').addEventListener('input', e => { if (e.target.id === 'nick') onNick(e.target.value); });
+$('#chips').addEventListener('click', e => {
+  if (e.target.closest('#clBtn')) { CL.open = !CL.open; renderChips(); }
+  if (e.target.closest('#askBtn')) askTeacher();
+  checkTut();
+});
+$('#clp').addEventListener('click', e => {
+  if (e.target.id === 'clClose') { CL.open = false; renderChips(); return; }
+  const b = e.target.closest('[data-cl]'); if (!b) return; const [k, v] = b.dataset.cl.split(':');
+  if (CL.marks[k] === v) { const { [k]: _, ...rest } = CL.marks; CL.marks = rest; } else CL.marks[k] = v; renderChips(); checkTut();
+});
+document.addEventListener('click', e => { if (e.target.id === 'tutSkip') { S.tut.on = false; save(); checkTut(); toast('ข้ามบทเรียนแล้ว เปิดดูใหม่ได้จากเมนู ≡'); } });
 $('#spotbar').addEventListener('click', e => {
   if (e.target.id === 'spotSkip' && spotting() && !spot.busy) finishPass(S.queue[0]);
   if (e.target.id === 'spotList' && spotting() && !spot.busy) openModal(spotListHTML());

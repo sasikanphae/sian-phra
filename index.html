@@ -137,6 +137,35 @@ button,select,input{font:inherit;color:inherit}
 .dbg{position:fixed;z-index:40;right:6px;bottom:calc(60px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:4px;font:600 12px Kanit,sans-serif}
 .dbg button{min-height:36px;padding:4px 10px;border-radius:8px;border:1px solid #7cf;background:#0a2a3aee;color:#bdf;cursor:pointer}
 .dbg .dbb{display:flex;flex-direction:column;gap:4px}.dbg .dbb[hidden]{display:none}
+.btn.on{box-shadow:inset 0 0 0 3px #fff8,0 0 12px #ffd76a}
+.chips{position:absolute;z-index:4;right:10px;top:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.chips[hidden],.clp[hidden],.coach[hidden],.coach-arrow[hidden]{display:none}
+.chip{min-height:44px;padding:4px 12px;border-radius:12px;border:1px solid var(--gold2);background:#1d0c08e0;color:#ffe9c2;font:600 14px Kanit,sans-serif;cursor:pointer;line-height:1.15;text-align:right}
+.chip small{display:block;font-weight:400;font-size:11px;color:var(--mute)}
+.clp{position:absolute;z-index:5;left:8px;right:8px;bottom:8px;max-height:68%;overflow:auto;background:#1d0c08f2;border:2px solid var(--gold2);border-radius:14px;padding:8px 10px}
+.clh{display:flex;justify-content:space-between;align-items:center}.clh b{font:600 17px Kanit,sans-serif;color:#ffd76a}
+.x.clx{position:static;width:44px;height:44px}
+.clr{display:flex;justify-content:space-between;gap:8px;align-items:center;border-top:1px solid var(--line);padding:6px 0}
+.clr b{display:block;font:600 14px Kanit,sans-serif}.clr small{display:block;font-size:12px;color:var(--mute)}
+.clb{display:flex;gap:4px;flex:none}
+.clb button{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);background:#0005;font:700 18px Kanit,sans-serif;cursor:pointer;color:var(--ink)}
+.clb .ok.on{background:#1f5a33;border-color:#3fbf6a}.clb .bad.on{background:#6d1414;border-color:#ff6b5b}.clb .unk.on{background:#5a4a12;border-color:var(--gold)}
+.cmpl,.cmpdiv{display:none}
+.stage.cmp .cmpl{display:block;position:absolute;z-index:3;font:600 12px Kanit,sans-serif;padding:3px 10px;border-radius:99px;background:#000a;color:#ffe9c2;border:1px solid var(--line)}
+.stage.cmp .cmpl.ref{color:#8ff0a8;border-color:#3fbf6a}
+.stage.cmp .hint{display:none}
+.stage.cmp .cmpdiv{display:block;position:absolute;z-index:2;background:var(--gold2)}
+.rv{border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:#0003}
+.rvv{grid-template-columns:repeat(2,minmax(0,1fr));max-width:300px}
+.rvd{margin:4px 0 0;padding-left:18px;font-size:14px}
+.coach{position:fixed;z-index:15;flex-wrap:wrap;background:#2e140ef5;border:2px solid var(--gold);border-radius:14px;padding:8px 12px;display:flex;gap:8px;align-items:center;box-shadow:0 8px 24px #000a}
+.coach p{margin:0;flex:1 1 100%;font:600 15px/1.35 Kanit,sans-serif;color:#ffe9c2}.coach .btn{flex:none;font-size:13px;min-height:44px;margin-left:auto}
+.coach-arrow{position:fixed;z-index:15;transform:translateX(-50%);color:#ffd76a;font:700 26px Kanit,sans-serif;pointer-events:none;text-shadow:0 2px 6px #000;animation:bob .8s ease-in-out infinite alternate}
+.coach-arrow.drag{font-size:18px;background:#000a;padding:4px 12px;border-radius:99px}
+@keyframes bob{to{margin-top:8px}}
+.coach-tgt{animation:glow 1s ease-in-out infinite alternate}
+@keyframes glow{to{box-shadow:0 0 0 3px #ffd76a,0 0 18px #ffd76a}}
+@media(prefers-reduced-motion:reduce){.coach-arrow,.coach-tgt{animation:none}}
 .span2{grid-column:span 2}.span3{grid-column:1/-1}
 .tabs{grid-area:tabs;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#0f0604;border-top:1px solid var(--line)}
 .tab{min-height:52px;border:0;background:none;cursor:pointer;font:600 14px Kanit,sans-serif;color:var(--mute);padding:4px 2px;position:relative}
@@ -206,6 +235,9 @@ button,select,input{font:inherit;color:inherit}
     <div class="loupe" id="loupe"></div>
     <div class="qinfo" id="qinfo"></div>
     <div class="spotbar" id="spotbar" hidden></div>
+    <div class="chips" id="chips" hidden></div>
+    <div class="clp" id="clp" hidden></div>
+    <div class="cmpl" id="cmpA">องค์ที่ส่อง</div><div class="cmpl ref" id="cmpB">องค์ครู (ของแท้)</div><div class="cmpdiv" id="cmpDiv"></div>
     <div class="hint" id="hint">ลากเพื่อหมุนพระ</div>
   </section>
   <section class="act" id="act"></section>
@@ -213,6 +245,7 @@ button,select,input{font:inherit;color:inherit}
 </div>
 <div class="modal" id="modal" hidden><div class="sheet" role="dialog" aria-modal="true"><button class="x" id="mx" aria-label="ปิด">×</button><div id="mbody"></div></div></div>
 <div class="toasts" id="toasts"></div>
+<div class="coach" id="coach" hidden></div><div class="coach-arrow" id="coachArrow" hidden></div>
 <script type="module" src="./game.js"></script>
 </body>
 </html>
