@@ -14,14 +14,16 @@
 2. **game data** — `MATS` (เนื้อพระ), `TELLS` (จุดสังเกตแท้/เก๊; `hidden: true` = จุดแฝง resin/weight ใช้ค่า `def` ไม่อยู่ใน spec องค์ครู), `TOOLS` (ร้านอุปกรณ์), `MODELS` (พระแต่ละรุ่น + `spec` ขององค์ครู + `weight` กรัม), `LEVELS`, `UNLOCK`, `TEMPLES`, `PIMS`, ชื่อ/บทพูดลูกค้า
 3. **procedural amulet 2D** — วาด heightmap ลง canvas (`drawFront`, `drawBack`, `drawFigure`) แล้ว `makeFace()` แปลงเป็น color / normal / displacement / alpha map พร้อมรอยสึก รูพรุน ลายงา ตามสภาพ (`cond`)
 4. **procedural amulet 3D** — `buildAmulet(model, spec, cond, seed, res)` = ExtrudeGeometry (ตัวองค์ + ขอบ cut/round + ความหนา) + plane หน้า/หลังที่ใช้ displacement + หูเหรียญ (เชื่อม/ตัน)
-5. **main view** — renderer หลัก, หมุนแบบ trackball (quaternion), pinch/wheel zoom, pan, พลิก, ส่อง (loupe), ไฟ UV (`applyUV`), แตะ (< 6px) → `onTap` → `pickPart` (raycast, mesh มี `userData.part` = front/back/body/loop) → `frontZone` (เทียบ FIG) และไฮไลต์จุด `highlight(key)`
+5. **main view** — renderer หลัก, หมุนแบบ trackball (quaternion), pinch/wheel zoom, pan, พลิก, ส่อง (loupe), ไฟ UV (`applyUV`), โหมดเทียบองค์ครู (`V.cmp`: องค์ครู `ref` อยู่ใน `holder` เดียวกัน วาด 2 viewport ด้วย scissor บน renderer เดียว `cmpRects`; มือถือแนวตั้งแบ่งบน-ล่าง), แตะ (< 6px) → `onTap` → `pickPart` (raycast, mesh มี `userData.part` = front/back/body/loop) → `frontZone` (เทียบ FIG) และไฮไลต์จุด `highlight(key)`
 6. **thumbnails** — renderer ตัวที่สอง (preserveDrawingBuffer) ทำภาพ หน้า/หลัง/ข้าง สำหรับสมุดและตู้พระ แบบคิวทีละงาน
 6.5 **sound** — เสียงสังเคราะห์ด้วย Web Audio (ไม่ใช้ไฟล์) `sfx('buy' | 'flip' | 'level')`; ปิดเสียงได้ในเมนู (`S.mute`)
-7. **state** — `S` (เงิน, xp, ชื่อเสียง, วัน, inv, queue, batches, custom models, tools), `makeCustomer` (รวม "เก๊เทพ" Lv.3+ ผิดแค่ resin/weight; ระบบซ่อน: 75% เลือกรุ่นที่ราคา ≤ 1.2 เท่าของเงินผู้เล่น — ห้ามให้ ask บทพูด หรือ UI อ้างถึงเงินผู้เล่น และไม่อธิบายในวิธีเล่น), `mutate` (สร้างของเก๊โดยเปลี่ยน tell ที่มองเห็น 1–3 จุด), `wrongKeys`, `gramsOf`
+7. **state** — `S` (เงิน, xp, ชื่อเสียง, วัน, inv, queue, batches, custom models, tools), `makeCustomer` (รวม "เก๊เทพ" Lv.3+ ผิดแค่ resin/weight; ระบบซ่อน: 75% เลือกรุ่นที่ราคา ≤ 1.2 เท่าของเงินผู้เล่น — ห้ามให้ ask บทพูด หรือ UI อ้างถึงเงินผู้เล่น และไม่อธิบายในวิธีเล่น), `mutate(spec, n, r, tier)` (สร้างของเก๊; tier `'easy'` Lv.1–2 ผ่าน `easyFake` = ต่างชัดและต้องมีจุดผิดด้านหน้า, ปกติ Lv.3–4, `'fine'` Lv.5+ ต่างละเอียด), `wrongKeys`, `gramsOf`
 8. **rendering** — `render()` วาด HUD / การ์ดลูกค้า / ปุ่ม / แท็บ; โหมด `shop` (หน้าร้าน) กับ `own` (ส่ององค์ในตู้)
 9. **actions** — ต่อราคา, รับเช่า (เงินไม่พอ → `shortHTML`: ฝากขาย `it.consign`, เทิร์น `doTurn`, ลงหุ้น `it.share`, ยืม `S.loan`; ส่วนแบ่งตอนขาย `myCut`), ไม่เอา → โหมดชี้จุดเก๊ (`spot`, `commitSpot`, ชี้ได้ครั้งเดียวต่อองค์ผ่าน `c.pointed`), ส่งตรวจ, ปล่อยเช่า, `endDay()` (ผลตรวจ, เฉลยองค์ที่ปฏิเสธ, ยอดบูชารุ่นที่จัดสร้าง, ค่าแผง)
+9.3 **guide** — `curPiece()`, เช็กลิสต์ `CL` (ล้างใน `loadStage`, ✗ ≤ 2 ข้อแล้วกดไม่เอา = `commitSpot`), ถามอาจารย์ `askTeacher` (`S.ask`, คำตอบเก็บใน `piece.teach`), เฉลยพร้อมภาพ `revealCard` (thumb kind `x` ผ่าน `XA`), บทเรียน `tutCustomers` / `TUT` / `checkTut` (`S.tut`, ลูกค้า `c.tut` 1–3)
 9.5 **daily** — ส่องพระประจำวัน: `dailySet(date)` seed จาก `hash('daily:'+วันที่เวลาไทย)`, โหมด `daily` บน stage เดิม, จับเวลา, streak, คัดลอกผลแชร์
 9.7 **จัดสร้างพระ** (อยู่ในส่วน modals) — `TF` = สถานะหน้าออกแบบ 5 ขั้น (`wizHTML`, ตัวอย่าง 3D ผ่าน `PVA` + thumbnail renderer), `makeBatch`, หน้ารุ่น `batchCard` (หลอด hype/heat, `priceSVG`, `bAct` สายขาว/สายเทา, `LIVE` ไลฟ์สด), `dayBatch` (ตอน endDay), `sellStock`; ข้อมูล `INGR`, `RECIPES` (ลับ), `LUCKY` (ลับ), `EVENTS`, `PAGES`; batch มี `hype heat mp base hist keep stock coded seqOK`; `S.trust` / `S.templeBan` / `S.recipes` / `S.kaka` / `S.tlog` เติมค่าเซฟเก่าใน `normTemple()`
+10.5 **debug** — แผงทดสอบ (`DEBUG_ACTS`) แสดงเฉพาะเมื่อ URL มี `#debug` (เปิดเกมด้วย `index.html#debug`)
 10. **modals** — ร้านอุปกรณ์, สมุดองค์ครู, ตู้พระ, ประกวด (`runContest`), จัดสร้าง (`makeBatch`), เมนู, วิธีเล่น
 
 ## หลักการสำคัญ
@@ -29,7 +31,7 @@
 - จุดสังเกตใหม่ต้องเพิ่มทั้งใน `TELLS` (label, ตัวเลือก, ข้อความ) และในโค้ดวาด/สร้าง 3D ให้ "มองเห็นได้จริง" บนองค์พระ (หรือผ่านเครื่องมือ เช่น UV/ตาชั่ง) และถ้าแตะชี้ได้ ให้เพิ่มโซนใน `frontZone` / `keyPos` ด้วย
 - field ใหม่ใน `S` ต้องมีค่าเริ่มต้นทั้งใน `newGame()` และบรรทัดเติมค่าให้เซฟเก่า (ต่อจาก `S.stats.spotted = ...`)
 - ห้ามเฉลยโบนัสชื่อมงคลและสูตรตำรับลับใน UI/วิธีเล่น (ค่า "กระแสเริ่มต้น" ที่โชว์ตอนออกแบบไม่รวมโบนัสลับ)
-- แถวปุ่ม `#act` = แถวเครื่องมือ (`toolBtns`) + แถวตัดสินใจ ไม่เกิน 4 ปุ่มต่อแถว
+- แถวปุ่ม `#act` = แถวเครื่องมือ (`toolBtns`: พลิก ส่อง เทียบ UV) + แถวตัดสินใจ ไม่เกิน 4 ปุ่มต่อแถว; สมุดเปิดจากแท็บล่าง, เช็กลิสต์/ถามอาจารย์เป็นชิปบน stage (`#chips`)
 - พระ วัด ราคา และจุดสังเกตทั้งหมดเป็นเรื่องสมมติ ห้ามใช้ชื่อพระเครื่อง/วัด/เกจิจริง
 - ข้อความในเกมเป็นภาษาไทย ฟอนต์ Kanit (หัวข้อ/ปุ่ม) + Sarabun (เนื้อหา) จาก Google Fonts
 - ต้องเล่นได้บนมือถือ: ปุ่มสูง ≥ 44px, ทดสอบที่ความกว้าง 360–430px, เลย์เอาต์จอกว้าง ≥ 900px แยกคอลัมน์ขวา
