@@ -1,459 +1,8 @@
 import * as THREE from './three.module.min.js';
-
-/* ================= utils ================= */
-const $ = s => document.querySelector(s);
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const lerp = (a, b, t) => a + (b - a) * t;
-function rng(seed) { let a = seed >>> 0; return () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-function hash(s) { let h = 2166136261; for (const ch of String(s)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
-const fmt = n => (n < 0 ? '−฿' : '฿') + Math.abs(Math.round(n)).toLocaleString('en-US');
-const pick = (r, a) => a[Math.floor(r() * a.length)];
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const round100 = n => Math.max(100, Math.round(n / 100) * 100);
-function wpick(r, pairs) { let t = pairs.reduce((s, p) => s + p[1], 0) * r(); for (const p of pairs) { if ((t -= p[1]) <= 0) return p[0]; } return pairs[pairs.length - 1][0]; }
-
-/* ================= game data (fictional) ================= */
-const MATS = {
-  clay:   { name: 'เนื้อดินเผา', base: [158, 92, 60], dark: [58, 30, 20], hi: [212, 160, 118], rough: .95, metal: 0 },
-  powder: { name: 'เนื้อผงพุทธคุณ', base: [214, 199, 168], dark: [104, 88, 64], hi: [244, 236, 216], rough: .88, metal: 0 },
-  copper: { name: 'เนื้อทองแดง', base: [168, 100, 62], dark: [48, 34, 26], hi: [238, 178, 126], rough: .42, metal: .85, patina: [70, 112, 84] },
-  silver: { name: 'เนื้อเงิน', base: [196, 196, 198], dark: [52, 52, 58], hi: [250, 250, 250], rough: .3, metal: .95, patina: [90, 80, 70] },
-  lead:   { name: 'เนื้อตะกั่ว', base: [118, 120, 124], dark: [38, 38, 42], hi: [184, 186, 190], rough: .62, metal: .55, patina: [206, 202, 188] },
-};
-const THW = { thin: .055, mid: .11, thick: .19 };
-const TELLS = {
-  hand:   { label: 'ปางพระหัตถ์', opts: ['mara', 'samadhi'], txt: { mara: 'ปางมารวิชัย: มือขวาวางคว่ำที่เข่า', samadhi: 'ปางสมาธิ: มือวางซ้อนกันบนตัก' } },
-  flame:  { label: 'พระเกศ', opts: ['tall', 'short'], txt: { tall: 'เกศยาวเรียวแหลม', short: 'เกศสั้นป้อม' } },
-  tiers:  { label: 'ฐานชั้น', num: [1, 5], txt: v => v + ' ชั้น' },
-  petals: { label: 'กลีบบัวที่ฐาน', num: [4, 11], txt: v => v + ' กลีบ' },
-  dots:   { label: 'เม็ดไข่ปลารอบซุ้ม', num: [9, 19], txt: v => v + ' เม็ด' },
-  back:   { label: 'ด้านหลัง', opts: ['plain', 'circle', 'square', 'yantra'], txt: { plain: 'หลังเรียบ มีรอยลายนิ้วมือ', circle: 'ตราประทับวงกลม', square: 'ตราประทับสี่เหลี่ยม', yantra: 'ยันต์ 3 แถว' } },
-  edge:   { label: 'ขอบข้าง', opts: ['cut', 'round'], txt: { cut: 'ตัดเป็นเหลี่ยมคม', round: 'มนกลมเรียบ' } },
-  thick:  { label: 'ความหนา (ดูด้านข้าง)', opts: ['thin', 'mid', 'thick'], txt: { thin: 'บาง', mid: 'หนาปานกลาง', thick: 'หนามาก' } },
-  grain:  { label: 'ผิวเนื้อ (ใช้กล้องส่อง)', opts: ['pores', 'crackle', 'smooth', 'oxide'], txt: { pores: 'มีรูพรุนเม็ดทรายเล็ก ๆ ทั่วองค์', crackle: 'มีรอยแตกลายงาทั่วผิว', smooth: 'ผิวเรียบตึง ไม่มีร่องรอยธรรมชาติ', oxide: 'มีคราบไขขาวเป็นดวง ๆ เกาะตามผิว' } },
-  palm:   { label: 'ยันต์ที่ฝ่ามือ (ใช้กล้องส่อง)', opts: ['una', 'na', 'plain'], txt: { una: 'ยันต์อุณาโลมนูนบนฝ่ามือทั้งสองข้าง', na: 'ยันต์ตัวขอมขีดเดียวบนฝ่ามือ', plain: 'ฝ่ามือเรียบ ไม่มียันต์' } },
-  // จุดสังเกตแฝง: ไม่อยู่ใน spec ขององค์ครู (ใช้ค่า def) ของเก๊ทั่วไปไม่เปลี่ยน มีแต่ "เก๊เทพ" ที่ผิดตรงนี้
-  resin:  { label: 'เรืองแสงใต้ไฟ UV', hidden: true, def: 'no', opts: ['no', 'yes'], txt: { no: 'ไม่เรืองแสง (ของแท้ไม่เรืองแสงใต้ UV)', yes: 'เรืองแสงสีฟ้าอมเขียว: เนื้อเรซิ่นปลอม' } },
-  weight: { label: 'น้ำหนัก (ใช้ตาชั่ง)', hidden: true, def: 'std', opts: ['std', 'light', 'heavy'], txt: { std: 'ตรงกับองค์ครู (คลาดเคลื่อนไม่เกิน ±3%)', light: 'เบากว่าองค์ครู 12–25%', heavy: 'หนักกว่าองค์ครู 12–25%' } },
-  // มวลสาร: ค่าเป็นสตริง id เรียงตัวอักษรคั่นด้วย + ต่อท้าย * = ของเทียม เช่น 'gold+wan*'
-  code:   { label: 'โค้ดกำกับองค์ (ด้านหลัง)', opts: ['stamp', 'none', 'wrong'], txt: { stamp: 'ตอกโค้ดกำกับองค์ในกรอบใต้ยันต์', none: 'ไม่มีโค้ดกำกับ', wrong: 'โค้ดตำแหน่งเพี้ยน ลายตัวเลขไม่ตรงแบบ' } },
-  ingr:   { label: 'มวลสาร (ใช้กล้องส่อง)', txt: v => ingrTxt(v), mut: (r, v) => mutIngr(r, v) },
-  loop:   { label: 'หูเหรียญ', opts: ['weld', 'cast'], txt: { weld: 'หูเชื่อม: ห่วงกลมแยกชิ้น', cast: 'หูตัน: แผ่นแบนหล่อติดเหรียญ' } },
-};
-const tellTxt = (k, v) => { const t = TELLS[k].txt; return typeof t === 'function' ? t(v) : t[v]; };
-const MODELS = [
-  { id: 'nangpaya', name: 'พระนางพญา วัดเขาแก้ว', shape: 'tri', mat: 'clay', lvl: 1, price: 9000, weight: 14.5,
-    spec: { hand: 'mara', flame: 'short', back: 'plain', edge: 'cut', thick: 'thick', grain: 'pores' } },
-  { id: 'somdej', name: 'พระสมเด็จ วัดศรีมงคล', shape: 'rect', mat: 'powder', lvl: 1, price: 28000, weight: 9.5,
-    spec: { hand: 'samadhi', tiers: 3, flame: 'short', back: 'plain', edge: 'cut', thick: 'mid', grain: 'crackle' } },
-  { id: 'coin1', name: 'เหรียญรุ่นแรก วัดหนองบัว', shape: 'oval', mat: 'copper', lvl: 2, price: 55000, weight: 12,
-    spec: { hand: 'mara', petals: 5, flame: 'tall', back: 'yantra', loop: 'weld' } },
-  { id: 'sum', name: 'พระซุ้มเรือนแก้ว วัดทุ่งทอง', shape: 'arch', mat: 'clay', lvl: 3, price: 160000, weight: 17,
-    spec: { hand: 'mara', petals: 7, dots: 13, flame: 'tall', back: 'plain', edge: 'cut', thick: 'thick', grain: 'pores' } },
-  { id: 'pidta', name: 'พระปิดตา วัดบ้านนา', shape: 'pidta', mat: 'lead', lvl: 4, price: 320000, weight: 38,
-    spec: { palm: 'una', back: 'yantra', edge: 'round', thick: 'thick', grain: 'oxide' } },
-  { id: 'somdejG', name: 'พระสมเด็จพิมพ์ใหญ่ กรุเก่า วัดศรีมงคล', shape: 'rect', mat: 'powder', gold: true, lvl: 4, price: 680000, weight: 10.5,
-    spec: { hand: 'samadhi', tiers: 3, flame: 'tall', back: 'circle', edge: 'cut', thick: 'mid', grain: 'crackle' } },
-  { id: 'coin2', name: 'เหรียญเงินรุ่นพิเศษ วัดหนองบัว', shape: 'oval', mat: 'silver', lvl: 5, price: 1800000, weight: 15.5,
-    spec: { hand: 'samadhi', petals: 9, flame: 'short', back: 'square', loop: 'weld' } },
-];
-const LEVELS = [
-  { xp: 0, name: 'มือใหม่หัดส่อง' }, { xp: 120, name: 'นักเลงพระ' }, { xp: 350, name: 'เซียนเปิดแผง' },
-  { xp: 800, name: 'เซียนดังประจำสนาม' }, { xp: 1600, name: 'เซียนใหญ่' }, { xp: 3000, name: 'ปรมาจารย์วงการพระ' },
-];
-const UNLOCK = { 2: 'ลูกค้าเริ่มนำ "เหรียญรุ่นแรก วัดหนองบัว" มาเสนอ', 3: 'ปลดล็อก งานประกวดพระ และ "พระซุ้มเรือนแก้ว วัดทุ่งทอง"', 4: 'ปลดล็อก "พระสมเด็จพิมพ์ใหญ่ กรุเก่า" องค์หลักแสน และ "พระปิดตา วัดบ้านนา" เนื้อตะกั่ว', 5: 'ปลดล็อก จัดสร้างพระกับวัด และ "เหรียญเงินรุ่นพิเศษ"', 6: 'คุณคือปรมาจารย์วงการพระแล้ว!' };
-const TEMPLES = [
-  { id: 'pa', name: 'วัดป่าสันติธรรม', fame: 1, rep: 0 },
-  { id: 'tt', name: 'วัดทุ่งทอง', fame: 1.6, rep: 35 },
-  { id: 'kk', name: 'วัดเขาแก้ว', fame: 2.3, rep: 60 },
-];
-const PIMS = { rect: 'พิมพ์สมเด็จ', tri: 'พิมพ์นางพญา', arch: 'พิมพ์ซุ้มเรือนแก้ว', oval: 'เหรียญ' };
-const DW = { clay: 14, powder: 10, copper: 12, silver: 15, lead: 38 };
-const mWeight = m => m.weight || DW[m.mat];
-const TOOLS = [
-  { id: 'loupe', name: 'กล้องส่อง 20x', price: 15000, lvl: 1, desc: 'ซูมได้ลึกขึ้นอีกเท่าตัว และปุ่ม "ส่อง" ซูมใกล้ขึ้น เห็นรูพรุน ลายงา และยันต์ชัดกว่าเดิม' },
-  { id: 'uv', name: 'ไฟฉาย UV', price: 40000, lvl: 2, desc: 'เพิ่มปุ่ม "UV" ส่องในที่มืดใต้แสงม่วง เนื้อเรซิ่นปลอมจะเรืองแสงสีฟ้าอมเขียว ของแท้ไม่เรืองแสง' },
-  { id: 'scale', name: 'ตาชั่งดิจิทัล', price: 80000, lvl: 3, desc: 'แสดงน้ำหนักองค์พระเป็นกรัมในการ์ด เทียบกับน้ำหนักองค์ครูในสมุด ของแท้คลาดเคลื่อนไม่เกิน ±3%' },
-];
-// มวลสาร (สมมติทั้งหมด): cost = บาท/องค์, hype = กระแสเริ่มต้น, price = ราคาสะสม +%, kind = รูปร่างที่วาดบนเนื้อพระ, col = สี (เหรียญโลหะใช้เป็นสีที่ผสมเข้าเนื้อ)
-const INGR = {
-  powderOld: { name: 'ผงพุทธคุณเก่า', cost: 4, hype: 0, price: 0, kind: 'dot', col: [236, 226, 196], look: 'เม็ดขาวนวลเล็ก ๆ' },
-  gold:      { name: 'ทองคำเปลว', cost: 25, hype: 5, price: 0, kind: 'flake', col: [248, 202, 70], look: 'จุดทองระยิบ' },
-  wan:       { name: 'ว่านมงคล 108', cost: 12, hype: 0, price: .10, kind: 'dot', col: [34, 90, 46], look: 'เม็ดเขียวเข้ม' },
-  tabai:     { name: 'ผงตะไบพระกริ่ง', cost: 30, hype: 0, price: .15, kind: 'metal', col: [222, 222, 228], look: 'เศษโลหะแวววาว', lvl: 5 },
-  hair:      { name: 'เกศาครูบาอาจารย์', cost: 15, hype: 8, price: 0, kind: 'hair', col: [20, 16, 14], look: 'เส้นดำเล็ก ๆ', trust: 50 },
-  itje:      { name: 'ผงอิทธิเจ', cost: 14, hype: 5, price: .05, kind: 'dot', col: [120, 142, 176], look: 'เม็ดเทาอมฟ้า' },
-  rice:      { name: 'ข้าวสารเสก', cost: 1, hype: 0, price: 0, kind: 'grain', col: [250, 248, 238], look: 'เม็ดขาวรี' },
-  kaka:      { name: 'ดินกากยายักษ์', cost: 20, hype: 12, price: .20, kind: 'shiny', col: [16, 14, 12], look: 'เม็ดดำมันวาว', award: true },
-};
-// ตำรับลับ: ต้องใช้มวลสารของจริงครบทุกอย่างใน need (ไม่เฉลยในเกม)
-const RECIPES = [
-  { id: 'wealth', name: 'ตำรับมหาโภคทรัพย์', need: ['gold', 'wan', 'powderOld'], hype: 15, price: 0, txt: 'กระแสเริ่มต้น +15' },
-  { id: 'metta', name: 'ตำรับเมตตามหานิยม', need: ['hair', 'itje', 'rice'], hype: 0, price: .25, txt: 'ราคาสะสม +25%' },
-  { id: 'power', name: 'ตำรับมหาอำนาจบารมี', need: ['kaka', 'tabai', 'gold'], hype: 10, price: .15, txt: 'กระแสเริ่มต้น +10 และราคาสะสม +15%' },
-  { id: 'safe', name: 'ตำรับแคล้วคลาดคุ้มภัย', need: ['wan', 'rice', 'itje', 'powderOld'], hype: 8, price: .10, txt: 'กระแสเริ่มต้น +8 และราคาสะสม +10%' },
-];
-// เหตุการณ์/เพจ/คอมเมนต์ไลฟ์ (สมมติทั้งหมด) {n} = ชื่อรุ่น
-const EVENTS = ['มีคนแคล้วคลาดจากอุบัติเหตุรถคว่ำ ห้อย {n} อยู่ คลิปแชร์กันทั้งโซเชียล', 'เลขท้ายพระ {n} ตรงกับหวยงวดนี้ คนแห่มาบูชา', 'แม่ค้าตลาดเช้าบอกว่าห้อย {n} แล้วขายดีเป็นเทน้ำเทท่า', 'ชาวประมงรอดจากพายุกลางทะเล ในกระเป๋ามี {n}', 'นักร้องลูกทุ่งห้อย {n} ขึ้นเวทีคอนเสิร์ต แฟนคลับตามหากันใหญ่'];
-const PAGES = ['เพจส่องพระสายมู', 'พระดีบอกต่อ', 'เซียนน้อยรีวิว', 'มูเตลูรายวัน', 'ตลาดพระออนไลน์ 24 ชม.'];
-const LIVE_T = { mat: 'เนื้อและมวลสาร', rite: 'พิธี', hist: 'ประวัติวัด' };
-const LIVE_Q = [['เนื้ออะไรครับ', 'mat'], ['มีมวลสารอะไรบ้าง', 'mat'], ['ใส่ทองคำเปลวจริงไหม', 'mat'], ['ผงเก่ามาจากไหนครับ', 'mat'], ['พิธีที่ไหน', 'rite'], ['ใครปลุกเสกครับ', 'rite'], ['เสกกี่วาระ', 'rite'], ['พิธีจัดวันไหน', 'rite'], ['แท้ไหม', 'hist'], ['วัดอยู่จังหวัดไหน', 'hist'], ['วัดนี้เก่าแก่แค่ไหน', 'hist'], ['เจ้าอาวาสองค์ก่อนเป็นใคร', 'hist']];
-const VIEWERS = ['คุณเอ', 'พี่ต่อ', 'น้องมิ้น', 'เฮียกุ้ย', 'ป้าแดง', 'หนุ่มโคราช', 'สายมูตัวจริง', 'เซียนบ้านนอก'];
-const LUCKY = ['รวย', 'เฮง', 'มั่งมี', 'ลาภ', 'แคล้วคลาด', 'เมตตา'];
-const NAME_A = ['รวย', 'เฮง', 'มั่งมี', 'มหาลาภ', 'แคล้วคลาด', 'เมตตา', 'บารมี'], NAME_B = ['ทันใจ', 'ล้นฟ้า', 'ร้อยล้าน', 'คุ้มภัย', 'พูนทรัพย์'];
-const ingrList = v => v ? v.split('+').map(x => ({ id: x.replace('*', ''), fake: x.endsWith('*') })).filter(x => INGR[x.id]) : [];
-const ingrKey = l => l.map(x => x.id + (x.fake ? '*' : '')).sort().join('+');
-const ingrTxt = v => { const l = ingrList(v); return l.length ? l.map(x => INGR[x.id].name + (x.fake ? ' (เทียม)' : '')).join(', ') : 'ไม่มีมวลสาร'; };
-// ของเก๊: ขาดมวลสาร 1–2 อย่าง หรือใส่ผิดชนิด และเป็นของเทียมทั้งหมด
-function mutIngr(r, v) {
-  const l = ingrList(v).map(x => x.id);
-  if (l.length && r() < .55) { for (let i = 0, k = Math.min(l.length, 1 + Math.floor(r() * 2)); i < k; i++) l.splice(Math.floor(r() * l.length), 1); }
-  else { const nw = pick(r, Object.keys(INGR).filter(p => !l.includes(p))); if (l.length) l[Math.floor(r() * l.length)] = nw; else l.push(nw); }
-  return ingrKey(l.map(id => ({ id, fake: true })));
-}
-const UNIT = { clay: 40, powder: 60, copper: 120, silver: 600 };
-const NAMES = ['ลุงสมชาย', 'ป้าบุญมี', 'เฮียเส็ง', 'เจ๊หมวย', 'พี่โอ๊ค', 'น้องต้น', 'ตาเปลี่ยน', 'คุณนิด', 'พี่บอย', 'ยายจันทร์', 'เสี่ยเปา', 'ลุงแดง', 'พี่หนิง', 'น้าเขียว', 'คุณวิชัย', 'อาจารย์ประยูร'];
-const HONEST = ['ของตกทอดจากคุณพ่อ เก็บในตู้มาหลายสิบปีแล้วครับ', 'ได้รับแจกตอนบวชเมื่อนานมาแล้ว ไม่เคยเอาไปส่องที่ไหนเลย', 'คุณยายห้อยคอมาทั้งชีวิต ลูกหลานอยากให้คนที่รู้คุณค่าดูแลต่อ', 'ไม่แน่ใจว่าแท้ไหม อยากให้เซียนช่วยดู ถ้าราคาพอดีก็ให้เช่าเลย', 'เพื่อนบ้านเก่ามอบให้ก่อนย้ายไปต่างจังหวัด'];
-const SLICK = ['รับประกันแท้ร้อยเปอร์เซ็นต์ ผ่านมือเซียนดังมาแล้ว', 'ต้องรีบใช้เงินด่วน ราคานี้ถูกกว่าตลาดเยอะ ตัดสินใจเลย', 'เพิ่งได้มาจากกรุแตกใหม่ ยังไม่มีใครเห็นเลยนะ', 'องค์นี้สวยแชมป์ ไม่ต้องส่องหรอก ดูด้วยตาก็รู้', 'มีคนจองไว้แล้ว แต่ถ้าเอาตอนนี้ให้ก่อนเลย'];
-
-/* ================= procedural amulet: 2D relief maps ================= */
-const TW = 512, TH = 640;
-const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-const g = v => `rgb(${v},${v},${v})`;
-const qb = (a, c, b, t) => [(1 - t) ** 2 * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0], (1 - t) ** 2 * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1]];
-const OUT = {};
-function outlinePts(shape) {
-  if (OUT[shape]) return OUT[shape];
-  const P = [];
-  if (shape === 'rect') {
-    const x0 = .05, x1 = .95, y0 = .04, y1 = .96, r = .06, ry = r * TW / TH;
-    const corner = (cx, cy, a0) => { for (let i = 0; i <= 6; i++) { const a = a0 + i / 6 * Math.PI / 2; P.push([cx + Math.cos(a) * r, cy + Math.sin(a) * ry]); } };
-    corner(x1 - r, y1 - ry, 0); corner(x0 + r, y1 - ry, Math.PI / 2); corner(x0 + r, y0 + ry, Math.PI); corner(x1 - r, y0 + ry, 1.5 * Math.PI);
-  } else if (shape === 'arch') {
-    const x0 = .06, x1 = .94, yb = .96, ys = .42, ap = [.5, .03];
-    P.push([x1, yb], [x0, yb], [x0, ys]);
-    for (let i = 1; i <= 16; i++) P.push(qb([x0, ys], [x0 + .02, .1], ap, i / 16));
-    for (let i = 1; i <= 16; i++) P.push(qb(ap, [x1 - .02, .1], [x1, ys], i / 16));
-  } else if (shape === 'tri') {
-    const pts = [[.5, .05], [.93, .95], [.07, .95]], k = .09;
-    for (let i = 0; i < 3; i++) {
-      const p = pts[i], pv = pts[(i + 2) % 3], nx = pts[(i + 1) % 3];
-      const a = [lerp(p[0], pv[0], k), lerp(p[1], pv[1], k)], b = [lerp(p[0], nx[0], k), lerp(p[1], nx[1], k)];
-      for (let j = 0; j <= 6; j++) P.push(qb(a, p, b, j / 6));
-    }
-  } else if (shape === 'pidta') {
-    for (let i = 0; i < 72; i++) {
-      const a = i / 72 * Math.PI * 2; let y = .52 + Math.sin(a) * .47; const k = .82 + .18 * clamp((y - .05) / .8, 0, 1);
-      y = Math.min(y, .94); P.push([.5 + Math.cos(a) * .45 * k, y]);
-    }
-  } else {
-    for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2; P.push([.5 + Math.cos(a) * .45, .54 + Math.sin(a) * .43]); }
-  }
-  return OUT[shape] = P;
-}
-const inset = (P, f, cx = .5, cy = .53) => P.map(([x, y]) => [cx + (x - cx) * f, cy + (y - cy) * f]);
-function pathPts(x, P) { x.beginPath(); P.forEach(([a, b], i) => i ? x.lineTo(a * TW, b * TH) : x.moveTo(a * TW, b * TH)); x.closePath(); }
-function dome(x, cx, cy, rx, ry, h, edge = .4) {
-  x.save(); x.translate(cx, cy); x.scale(1, ry / rx);
-  const gr = x.createRadialGradient(0, 0, 0, 0, 0, rx); gr.addColorStop(0, g(h)); gr.addColorStop(1, g(Math.round(h * edge)));
-  x.fillStyle = gr; x.beginPath(); x.arc(0, 0, rx, 0, Math.PI * 2); x.fill(); x.restore();
-}
-function limb(x, pts, w, h) {
-  x.save(); x.lineCap = 'round'; x.lineJoin = 'round';
-  for (const [ww, hh] of [[w, h * .62], [w * .55, h]]) { x.strokeStyle = g(Math.round(hh)); x.lineWidth = ww; x.beginPath(); pts.forEach(([a, b], i) => i ? x.lineTo(a, b) : x.moveTo(a, b)); x.stroke(); }
-  x.restore();
-}
-function slab(x, x0, y0, w, h, v) {
-  const r = Math.min(h / 2, 8);
-  const gr = x.createLinearGradient(0, y0, 0, y0 + h); gr.addColorStop(0, g(v)); gr.addColorStop(1, g(Math.round(v * .7)));
-  x.fillStyle = gr; x.beginPath(); x.moveTo(x0 + r, y0); x.arcTo(x0 + w, y0, x0 + w, y0 + h, r); x.arcTo(x0 + w, y0 + h, x0, y0 + h, r); x.arcTo(x0, y0 + h, x0, y0, r); x.arcTo(x0, y0, x0 + w, y0, r); x.fill();
-}
-function glyph(x, gx, gy, sz, r, v) {
-  x.save(); x.strokeStyle = g(v); x.lineWidth = sz * .13; x.lineCap = 'round'; x.lineJoin = 'round';
-  const hx = gx - sz * .25 + r() * sz * .2, hy = gy - sz * .15 + r() * sz * .3;
-  x.beginPath(); x.arc(hx, hy, sz * .11, 0, Math.PI * 2); x.stroke();
-  x.beginPath(); x.moveTo(hx + sz * .1, hy);
-  const n = 2 + Math.floor(r() * 2);
-  for (let i = 0; i < n; i++) x.quadraticCurveTo(gx + (r() - .5) * sz, gy + (r() - .5) * sz, gx + (r() - .5) * sz * .8, gy + (r() - .5) * sz * .9);
-  x.stroke(); x.restore();
-}
-function unalom(x, cx, cy, R, v) {
-  x.save(); x.strokeStyle = g(v); x.lineWidth = R * .09; x.lineCap = 'round'; x.beginPath();
-  for (let t = 0; t <= Math.PI * 3.2; t += .1) { const rr = R * .05 + t / (Math.PI * 3.2) * R * .32; const px = cx + Math.cos(t) * rr, py = cy + R * .35 + Math.sin(t) * rr; t ? x.lineTo(px, py) : x.moveTo(px, py); }
-  for (let i = 0; i <= 20; i++) x.lineTo(cx + Math.sin(i * .9) * R * .12, cy + R * .1 - i / 20 * R * .9);
-  x.stroke(); x.restore();
-}
-const FIG = { rect: { cx: 256, by: 440, s: 300 }, tri: { cx: 256, by: 520, s: 320 }, arch: { cx: 256, by: 480, s: 290 }, oval: { cx: 256, by: 452, s: 262 }, pidta: { cx: 256, by: 528, s: 330 } };
-function drawPidta(x, f, spec) {
-  const { cx, by, s } = f;
-  slab(x, cx - s * .52, by + 4, s * 1.04, s * .06, 130);
-  dome(x, cx, by - s * .08, s * .52, s * .15, 165, .45);
-  dome(x, cx - s * .32, by - s * .07, s * .13, s * .075, 188, .55); dome(x, cx + s * .32, by - s * .07, s * .13, s * .075, 188, .55);
-  dome(x, cx, by - s * .38, s * .32, s * .3, 178, .5);
-  for (const k of [-1, 1]) limb(x, [[cx + k * s * .27, by - s * .5], [cx + k * s * .36, by - s * .64], [cx + k * s * .16, by - s * .8]], s * .085, 192);
-  dome(x, cx, by - s * .86, s * .25, s * .22, 186, .5);
-  dome(x, cx, by - s * 1.08, s * .07, s * .055, 180, .5);
-  for (const k of [-1, 1]) {
-    const px = cx + k * s * .115, py = by - s * .85;
-    dome(x, px, py, s * .13, s * .16, 214, .62);
-    for (let j = 0; j < 4; j++) dome(x, px + (j - 1.5) * s * .05, py - s * .14, s * .022, s * .03, 205, .6);
-    if (spec.palm === 'una') unalom(x, px, py - s * .02, s * .11, 250);
-    else if (spec.palm === 'na') glyph(x, px + s * .03, py, s * .17, rng(hash('pidta:na' + k)), 250);
-  }
-}
-function drawFigure(x, f, spec) {
-  const { cx, by, s } = f;
-  if (spec.tiers) { for (let i = 0; i < spec.tiers; i++) { const w = s * (.7 + .13 * i); slab(x, cx - w / 2, by + 6 + i * (s * .065 + 5), w, s * .065, 150); } }
-  else if (spec.petals) {
-    const n = spec.petals, W = s * .95, y = by + s * .075;
-    for (let i = 0; i < n; i++) dome(x, cx - W / 2 + (i + .5) * W / n, y, W / n * .44, s * .075, 170, .4);
-    slab(x, cx - W * .55, y + s * .085, W * 1.1, s * .045, 125);
-  } else slab(x, cx - s * .42, by + 6, s * .84, s * .055, 135);
-  dome(x, cx, by - s * .09, s * .38, s * .1, 170, .5);
-  dome(x, cx - s * .2, by - s * .1, s * .06, s * .035, 195, .6); dome(x, cx + s * .2, by - s * .1, s * .06, s * .035, 195, .6);
-  dome(x, cx, by - s * .32, s * .17, s * .22, 185, .55);
-  dome(x, cx - s * .15, by - s * .47, s * .075, s * .06, 170, .5); dome(x, cx + s * .15, by - s * .47, s * .075, s * .06, 170, .5);
-  const L = pts => limb(x, pts.map(([a, b]) => [cx + a * s, by + b * s]), s * .075, 185);
-  if (spec.hand === 'mara') {
-    L([[-.17, -.47], [-.25, -.3], [-.27, -.12]]); dome(x, cx - s * .27, by - s * .1, s * .05, s * .045, 205, .6);
-    L([[.17, -.47], [.24, -.29], [.05, -.17]]); dome(x, cx + s * .04, by - s * .16, s * .06, s * .03, 200, .6);
-  } else {
-    L([[-.17, -.47], [-.24, -.29], [-.04, -.17]]); L([[.17, -.47], [.24, -.29], [.04, -.17]]);
-    dome(x, cx, by - s * .16, s * .1, s * .045, 205, .6);
-  }
-  dome(x, cx, by - s * .56, s * .05, s * .04, 170, .6);
-  dome(x, cx - s * .098, by - s * .63, s * .022, s * .065, 150, .5); dome(x, cx + s * .098, by - s * .63, s * .022, s * .065, 150, .5);
-  dome(x, cx, by - s * .645, s * .09, s * .11, 215, .55);
-  dome(x, cx, by - s * .75, s * .065, s * .05, 205, .5);
-  const tall = spec.flame === 'tall', top = tall ? s * 1.1 : s * .82, w = tall ? s * .02 : s * .05, b0 = by - s * .78;
-  const gr = x.createLinearGradient(0, by - top, 0, b0); gr.addColorStop(0, g(150)); gr.addColorStop(1, g(205));
-  x.fillStyle = gr; x.beginPath(); x.moveTo(cx - w, b0); x.quadraticCurveTo(cx - w * .5, (b0 + by - top) / 2, cx, by - top); x.quadraticCurveTo(cx + w * .5, (b0 + by - top) / 2, cx + w, b0); x.closePath(); x.fill();
-}
-function drawFront(x, m, spec) {
-  const sh = m.shape, P = outlinePts(sh);
-  x.fillStyle = g(36); pathPts(x, P); x.fill();
-  x.strokeStyle = g(sh === 'oval' ? 150 : 105); x.lineWidth = sh === 'oval' ? 18 : 20; pathPts(x, inset(P, .93)); x.stroke();
-  if (sh === 'rect') {
-    x.strokeStyle = g(125); x.lineWidth = 7; x.beginPath(); x.moveTo(.17 * TW, .87 * TH); x.lineTo(.17 * TW, .36 * TH);
-    x.quadraticCurveTo(.17 * TW, .12 * TH, .5 * TW, .12 * TH); x.quadraticCurveTo(.83 * TW, .12 * TH, .83 * TW, .36 * TH); x.lineTo(.83 * TW, .87 * TH); x.stroke();
-  }
-  if (sh === 'arch') {
-    const arc = P.slice(2), path = inset(arc, .85, .5, .56);
-    const len = [0]; for (let i = 1; i < path.length; i++) len.push(len[i - 1] + Math.hypot((path[i][0] - path[i - 1][0]) * TW, (path[i][1] - path[i - 1][1]) * TH));
-    const tot = len[len.length - 1], n = spec.dots || 13;
-    for (let k = 0; k < n; k++) {
-      const t = (k + .5) / n * tot; let i = 1; while (i < len.length - 1 && len[i] < t) i++;
-      const f = (t - len[i - 1]) / (len[i] - len[i - 1]);
-      dome(x, lerp(path[i - 1][0], path[i][0], f) * TW, lerp(path[i - 1][1], path[i][1], f) * TH, 10, 10, 170, .45);
-    }
-    const inner = inset(arc, .76, .5, .58); x.strokeStyle = g(120); x.lineWidth = 6; x.beginPath();
-    inner.forEach(([a, b], i) => i ? x.lineTo(a * TW, b * TH) : x.moveTo(a * TW, b * TH)); x.lineTo(inner[inner.length - 1][0] * TW, .86 * TH); x.moveTo(inner[0][0] * TW, inner[0][1] * TH); x.lineTo(inner[0][0] * TW, .86 * TH); x.stroke();
-  }
-  if (sh === 'oval') {
-    slab(x, .27 * TW, .84 * TH, .46 * TW, .055 * TH, 105);
-    const r = rng(hash(m.id + ':txt')); for (let i = 0; i < 6; i++) glyph(x, .31 * TW + i * .075 * TW, .867 * TH, 26, r, 165);
-  }
-  if (sh === 'pidta') drawPidta(x, FIG[sh], spec); else drawFigure(x, FIG[sh], spec);
-}
-function drawBack(x, m, spec, r) {
-  const P = outlinePts(m.shape), metal = MATS[m.mat].metal > 0, cx = TW / 2, cy = TH * .53;
-  x.fillStyle = g(30); pathPts(x, P); x.fill();
-  if (m.shape === 'oval') { x.strokeStyle = g(150); x.lineWidth = 18; pathPts(x, inset(P, .93)); x.stroke(); }
-  if (!metal) for (let i = 0; i < 14; i++) dome(x, TW * (.2 + r() * .6), TH * (.2 + r() * .6), 20 + r() * 40, 20 + r() * 40, 40 + Math.round(r() * 25), .6);
-  const gr = rng(hash(m.id + ':back'));
-  if (spec.back === 'plain') {
-    if (!metal) {
-      const fx = cx + (r() - .5) * 140, fy = cy + (r() - .5) * 180, a0 = r() * 6;
-      x.save(); x.strokeStyle = g(58); x.lineWidth = 2.6;
-      for (let i = 1; i < 15; i++) { x.beginPath(); x.ellipse(fx, fy, 8 + i * 7, 10 + i * 8.5, a0, r() * .8, Math.PI * (1.2 + r() * .7)); x.stroke(); }
-      x.restore();
-    }
-  } else if (spec.back === 'circle') {
-    x.strokeStyle = g(140); x.lineWidth = 14; x.beginPath(); x.arc(cx, cy, TW * .2, 0, Math.PI * 2); x.stroke();
-    unalom(x, cx, cy - TW * .06, TW * .2, 160);
-  } else if (spec.back === 'square') {
-    const s = TW * .4; x.strokeStyle = g(140); x.lineWidth = 14; x.strokeRect(cx - s / 2, cy - s / 2, s, s);
-    for (let i = 0; i < 4; i++) glyph(x, cx + (i % 2 ? 1 : -1) * s * .22, cy + (i < 2 ? -1 : 1) * s * .22, s * .32, gr, 160);
-  } else {
-    unalom(x, cx, TH * .19, TW * .16, 150);
-    for (let row = 0; row < 3; row++) { const n = row === 1 ? 3 : 4; for (let i = 0; i < n; i++) glyph(x, cx + (i - (n - 1) / 2) * TW * .17, TH * (.4 + .14 * row), 52, gr, 155); }
-  }
-}
-function drawCode(x, m, spec, r) {
-  if (spec.code !== 'stamp' && spec.code !== 'wrong') return;
-  const wr = spec.code === 'wrong', rc = wr ? r : rng(hash(m.id + ':code')), bx = TW / 2 + (wr ? 24 : 0), by = TH * (wr ? .8 : .84);
-  x.strokeStyle = g(175); x.lineWidth = 5; x.strokeRect(bx - 64, by - 21, 128, 42);
-  for (let i = 0; i < 4; i++) glyph(x, bx - 44 + i * 29, by, 26, rc, 205);
-}
-function boxBlur(src, w, h, r, passes = 2) {
-  const a = new Float32Array(src), b = new Float32Array(w * h), d = 2 * r + 1;
-  for (let p = 0; p < passes; p++) {
-    for (let y = 0; y < h; y++) { const o = y * w; let s = 0; for (let i = -r; i <= r; i++) s += a[o + clamp(i, 0, w - 1)]; for (let x = 0; x < w; x++) { b[o + x] = s / d; s += a[o + Math.min(x + r + 1, w - 1)] - a[o + Math.max(x - r, 0)]; } }
-    for (let x = 0; x < w; x++) { let s = 0; for (let i = -r; i <= r; i++) s += b[clamp(i, 0, h - 1) * w + x]; for (let y = 0; y < h; y++) { a[y * w + x] = s / d; s += b[Math.min(y + r + 1, h - 1) * w + x] - b[Math.max(y - r, 0) * w + x]; } }
-  }
-  return a;
-}
-function noise(w, h, cells, r) {
-  const gw = cells + 2, gh = Math.ceil(cells * h / w) + 2, G = new Float32Array(gw * gh).map(() => r()), out = new Float32Array(w * h);
-  for (let y = 0; y < h; y++) { const fy = y / h * (gh - 2), y0 = Math.floor(fy), ty = fy - y0, sy = ty * ty * (3 - 2 * ty);
-    for (let x = 0; x < w; x++) { const fx = x / w * (gw - 2), x0 = Math.floor(fx), tx = fx - x0, sx = tx * tx * (3 - 2 * tx);
-      const a = G[y0 * gw + x0], b = G[y0 * gw + x0 + 1], c = G[(y0 + 1) * gw + x0], d = G[(y0 + 1) * gw + x0 + 1];
-      out[y * w + x] = lerp(lerp(a, b, sx), lerp(c, d, sx), sy); } }
-  return out;
-}
-function chan(cv) { const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, a = new Float32Array(cv.width * cv.height); for (let i = 0; i < a.length; i++) a[i] = d[i * 4] / 255; return a; }
-function makeFace(m, spec, cond, seed, res, side, D) {
-  const W = Math.round(TW * res), H = Math.round(TH * res), N = W * H, r = rng(seed + (side === 'back' ? 7777 : 0));
-  const c = mk(W, H), x = c.getContext('2d', { willReadFrequently: true });
-  x.setTransform(res, 0, 0, res, 0, 0); x.fillStyle = '#000'; x.fillRect(0, 0, TW, TH); x.globalCompositeOperation = 'lighten';
-  if (side === 'front') drawFront(x, m, spec); else { drawBack(x, m, spec, r); drawCode(x, m, spec, r); }
-  let h = chan(c);
-  const mc = mk(W, H), mx = mc.getContext('2d', { willReadFrequently: true }); mx.setTransform(res, 0, 0, res, 0, 0);
-  mx.fillStyle = '#000'; mx.fillRect(0, 0, TW, TH); mx.fillStyle = '#fff'; pathPts(mx, outlinePts(m.shape)); mx.fill();
-  if (cond < 88) { const P = outlinePts(m.shape); mx.fillStyle = '#000'; for (let i = 0, n = Math.floor((92 - cond) / 7); i < n; i++) { const p = P[Math.floor(r() * P.length)]; mx.beginPath(); mx.arc(p[0] * TW, p[1] * TH, 5 + r() * 10, 0, 7); mx.fill(); } }
-  const soft = boxBlur(chan(mc), W, H, Math.max(1, Math.round(5 * res)));
-  h = boxBlur(h, W, H, Math.max(1, Math.round((1.2 + (100 - cond) / 16) * res)));
-  const low = noise(W, H, 10, r), hi = noise(W, H, 44, r), mat = MATS[m.mat], metal = mat.metal > 0;
-  const grain = spec.grain || (metal ? 'metal' : 'pores'), smooth = grain === 'smooth', capH = 1 - (100 - cond) / 170;
-  for (let i = 0; i < N; i++) {
-    let v = h[i] + (low[i] - .5) * (smooth ? .008 : metal ? .015 : .04) + (hi[i] - .5) * (smooth ? .003 : metal ? .006 : .02);
-    if (v > capH) v = capH + (v - capH) * .3;
-    h[i] = Math.max(0, v) * soft[i] * soft[i];
-  }
-  const det = new Uint8Array(N), oxA = grain === 'oxide' ? new Float32Array(N) : null;
-  if (grain === 'pores') {
-    for (let k = 0, n = Math.round(2600 * res * res); k < n; k++) {
-      const px = Math.floor(r() * W), py = Math.floor(r() * H), rad = r() < .8 ? 1 : 2;
-      for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) { if (dx * dx + dy * dy > rad * rad) continue; const xx = px + dx, yy = py + dy; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue; const j = yy * W + xx; h[j] = Math.max(0, h[j] - .055); det[j] = 1; }
-    }
-  } else if (grain === 'crackle') {
-    const cc = mk(W, H), cx2 = cc.getContext('2d', { willReadFrequently: true }); cx2.strokeStyle = '#fff'; cx2.lineWidth = Math.max(1, 1.7 * res);
-    for (let k = 0; k < 46; k++) { let px = r() * W, py = r() * H, a = r() * 6.28; cx2.beginPath(); cx2.moveTo(px, py); for (let s = 0, n = 12 + r() * 40; s < n; s++) { a += (r() - .5) * 1.1; px += Math.cos(a) * 6 * res; py += Math.sin(a) * 6 * res; cx2.lineTo(px, py); } cx2.stroke(); }
-    const cr = chan(cc); for (let i = 0; i < N; i++) if (cr[i] > .3) { det[i] = 2; h[i] = Math.max(0, h[i] - .035 * cr[i]); }
-  } else if (grain === 'oxide') {
-    const ox = noise(W, H, 16, r), sp = noise(W, H, 70, r);
-    for (let i = 0; i < N; i++) { const k = clamp((ox[i] - .6) * 7, 0, 1) * clamp((sp[i] - .45) * 4, 0, 1); if (k > .05) { det[i] = 3; oxA[i] = k; h[i] += .008 * k; } }
-  }
-  // มวลสาร: เนื้อผง/ดินวาดเป็นเม็ด/เส้นเล็ก ๆ (เห็นชัดเมื่อส่อง) ตำแหน่งหลักจาก seed ของรุ่น + เล็กน้อยจาก seed ขององค์
-  // ของจริงนูนมีมิติ สีไม่สม่ำเสมอ; ของเทียมแบนและสีเรียบเท่ากันหมด; เหรียญโลหะใช้ผสมสีเข้าเนื้อแทน
-  const ING = ingrList(spec.ingr || ''), ingI = ING.length && !metal ? new Int8Array(N).fill(-1) : null, ingJ = ingI ? new Float32Array(N) : null;
-  if (ingI) {
-    const P0 = inset(outlinePts(m.shape), .86), S1 = Math.max(1, res);
-    ING.forEach((gI, gi) => {
-      const kind = INGR[gI.id].kind, rm = rng(hash(m.id + ':ingr:' + gI.id + side)), rp = rng(seed + hash(gI.id + side));
-      for (let k = 0; k < 300; k++) {
-        const rr = k < 260 ? rm : rp, fx = rr(), fy = rr(), ang = rr() * Math.PI, jr = rr(), sz = rr(), jit = gI.fake ? 1 : .8 + jr * .4;
-        if (!inPoly(fx, fy, P0)) continue;
-        const put = (px, py, a) => { px = Math.round(px); py = Math.round(py); if (px < 0 || py < 0 || px >= W || py >= H) return; const j = py * W + px; if (soft[j] < .6) return; ingI[j] = gi; ingJ[j] = jit; if (!gI.fake) h[j] += .03 * a; };
-        const disc = (cx, cy, rx, ry, an) => { const Rr = Math.ceil(Math.max(rx, ry)), c = Math.cos(an), sn = Math.sin(an); for (let dy = -Rr; dy <= Rr; dy++) for (let dx = -Rr; dx <= Rr; dx++) { const u = (dx * c + dy * sn) / rx, v = (-dx * sn + dy * c) / ry, d = u * u + v * v; if (d <= 1) put(cx + dx, cy + dy, 1 - d * .6); } };
-        const cx = fx * W, cy = fy * H;
-        if (kind === 'hair') { let x0 = cx, y0 = cy, a = ang * 2; for (let t = 0, L = (10 + sz * 8) * S1; t < L; t++) { put(x0, y0, .7); a += (rm() - .5) * .35; x0 += Math.cos(a); y0 += Math.sin(a); } }
-        else if (kind === 'grain') disc(cx, cy, 2.8 * S1, 1.2 * S1, ang);
-        else if (kind === 'metal') disc(cx, cy, (1.8 + sz) * S1, .8 * S1, ang);
-        else if (kind === 'flake') { disc(cx, cy, (1.2 + sz * .8) * S1, 1.1 * S1, ang); disc(cx + 1.4 * S1, cy + .8 * S1, .9 * S1, .9 * S1, 0); }
-        else if (kind === 'shiny') disc(cx, cy, 2 * S1, 2 * S1, 0);
-        else disc(cx, cy, (1.2 + sz * 1.1) * S1, (1.2 + sz * 1.1) * S1, 0);
-      }
-    });
-  }
-  const B = boxBlur(h, W, H, Math.max(2, Math.round(10 * res)));
-  x.globalCompositeOperation = 'source-over'; x.setTransform(1, 0, 0, 1, 0, 0);
-  const img = x.createImageData(W, H), d = img.data;
-  const nc = mk(W, H), nx = nc.getContext('2d'), ni = nx.createImageData(W, H), nd = ni.data;
-  const dc = mk(W, H), dx2 = dc.getContext('2d'), di = dx2.createImageData(W, H), dd = di.data;
-  const K = D * W * 1.15;
-  for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
-    const i = y * W + xx, j = i * 4;
-    const cav = clamp((B[i] - h[i]) * 9, 0, 1), rid = clamp((h[i] - B[i]) * 6, 0, 1), v = low[i] * .6 + hi[i] * .4;
-    const k1 = clamp(cav * .85 + (1 - v) * .18, 0, 1), k2 = clamp(rid * .5 + v * .12, 0, 1);
-    let col = [0, 1, 2].map(q => lerp(lerp(mat.base[q], mat.dark[q], k1), mat.hi[q], k2));
-    if (mat.patina) col = col.map((c0, q) => lerp(c0, mat.patina[q], cav * .65 * v));
-    if (m.gold && h[i] > .25 && hi[i] > .58) col = col.map((c0, q) => lerp(c0, [214, 168, 62][q], .78));
-    if (det[i] === 1) col = col.map(c0 => c0 * .4); else if (det[i] === 2) col = col.map(c0 => c0 * .38);
-    else if (det[i] === 3) col = col.map((c0, q) => lerp(c0, [226, 222, 206][q], .62 * oxA[i]));
-    if (ingI && ingI[i] >= 0) {
-      const gI = ING[ingI[i]], I = INGR[gI.id], sh = I.kind === 'flake' || I.kind === 'metal' || I.kind === 'shiny' ? .75 + hi[i] * .7 : 1;
-      col = gI.fake ? I.col.slice() : I.col.map((c0, q) => lerp(clamp(c0 * ingJ[i] * sh, 0, 255), col[q], .2));
-    } else if (metal && ING.length) for (const gI of ING) col = col.map((c0, q) => lerp(c0, INGR[gI.id].col[q], gI.fake ? .09 : .2 * low[i] * low[i]));
-    d[j] = col[0]; d[j + 1] = col[1]; d[j + 2] = col[2]; d[j + 3] = 255;
-    const hl = h[y * W + Math.max(xx - 1, 0)], hr = h[y * W + Math.min(xx + 1, W - 1)], hu = h[Math.max(y - 1, 0) * W + xx], hd = h[Math.min(y + 1, H - 1) * W + xx];
-    let ax = (hl - hr) * K, ay = (hd - hu) * K; const L = Math.hypot(ax, ay, 1);
-    nd[j] = (ax / L * .5 + .5) * 255; nd[j + 1] = (ay / L * .5 + .5) * 255; nd[j + 2] = (1 / L * .5 + .5) * 255; nd[j + 3] = 255;
-    dd[j] = dd[j + 1] = dd[j + 2] = clamp(h[i], 0, 1) * 255; dd[j + 3] = 255;
-  }
-  x.putImageData(img, 0, 0); nx.putImageData(ni, 0, 0); dx2.putImageData(di, 0, 0);
-  return { color: c, normal: nc, disp: dc, alpha: mc };
-}
-const SIDE = {};
-function sideTex(matId) {
-  if (SIDE[matId]) return SIDE[matId];
-  const mat = MATS[matId], c = mk(128, 128), x = c.getContext('2d'), r = rng(hash(matId));
-  x.fillStyle = `rgb(${mat.base.map(v => v * .82 | 0)})`; x.fillRect(0, 0, 128, 128);
-  for (let i = 0; i < 900; i++) { const k = .55 + r() * .7; x.fillStyle = `rgba(${mat.base.map(v => clamp(v * k, 0, 255) | 0)},.5)`; x.fillRect(r() * 128, r() * 128, 1 + r() * 2, 1 + r() * 2); }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 5);
-  return SIDE[matId] = t;
-}
-
-/* ================= procedural amulet: 3D ================= */
-function buildAmulet(m, spec, cond, seed, res = 1) {
-  const grp = new THREE.Group(), mat = MATS[m.mat], coin = m.shape === 'oval';
-  const thick = coin ? .055 : THW[spec.thick || 'mid'], edge = coin ? 'coin' : (spec.edge || 'cut');
-  const shape = new THREE.Shape(outlinePts(m.shape).map(([x, y]) => new THREE.Vector2(x - .5, (.5 - y) * 1.25)));
-  const bev = edge === 'cut' ? { s: .012, t: thick * .1, n: 1 } : edge === 'round' ? { s: .05, t: thick * .5, n: 8 } : { s: .012, t: thick * .3, n: 3 };
-  const depth = Math.max(.002, thick - 2 * bev.t);
-  const bg = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: bev.s, bevelThickness: bev.t, bevelSegments: bev.n, curveSegments: 24 });
-  bg.translate(0, 0, -depth / 2);
-  const bodyMat = new THREE.MeshStandardMaterial({ map: sideTex(m.mat), roughness: mat.rough, metalness: mat.metal });
-  const body = new THREE.Mesh(bg, bodyMat); body.userData.part = 'body'; grp.add(body);
-  const topY = (.5 - .11) * 1.25, mid = outlinePts(m.shape).filter(([, y]) => Math.abs(y - .55) < .08);
-  grp.userData = { shape: m.shape, thick, D: coin ? .03 : .045, topY, edgeX: Math.max(...mid.map(([x]) => x)) - .5 + bev.s * .6, resin: spec.resin === 'yes' };
-  const D = coin ? .03 : .045, seg = Math.round(190 * res);
-  const tex = (cv, srgb) => { const t = new THREE.CanvasTexture(cv); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
-  for (const side of ['front', 'back']) {
-    const f = makeFace(m, spec, cond, seed, res, side, D);
-    const mm = new THREE.MeshStandardMaterial({ map: tex(f.color, 1), normalMap: tex(f.normal), displacementMap: tex(f.disp), displacementScale: D, alphaMap: tex(f.alpha), alphaTest: .5, roughness: mat.rough, metalness: mat.metal });
-    const pm = new THREE.Mesh(new THREE.PlaneGeometry(1, 1.25, seg, Math.round(seg * 1.25)), mm);
-    pm.position.z = (side === 'front' ? 1 : -1) * (thick / 2 + .0008);
-    if (side === 'back') pm.rotation.y = Math.PI;
-    pm.userData.part = side; grp.add(pm);
-  }
-  if (coin) {
-    const lm = new THREE.MeshStandardMaterial({ map: sideTex(m.mat), metalness: mat.metal, roughness: mat.rough + .08 });
-    if (spec.loop === 'weld') {
-      const t = new THREE.Mesh(new THREE.TorusGeometry(.065, .016, 14, 40), lm); t.position.y = topY + .075; t.userData.part = 'loop'; grp.add(t);
-      const w = new THREE.Mesh(new THREE.SphereGeometry(.03, 16, 12), lm); w.scale.set(1.4, .8, .9); w.position.y = topY + .006; w.userData.part = 'loop'; grp.add(w);
-    } else {
-      const s = new THREE.Shape(); s.absarc(0, 0, .085, 0, Math.PI * 2); const hp = new THREE.Path(); hp.absarc(0, 0, .042, 0, Math.PI * 2, true); s.holes.push(hp);
-      const lg = new THREE.ExtrudeGeometry(s, { depth: thick * .8, bevelEnabled: true, bevelSize: .004, bevelThickness: .004, bevelSegments: 1, curveSegments: 24 });
-      lg.translate(0, 0, -thick * .4); const lmsh = new THREE.Mesh(lg, lm); lmsh.position.y = topY + .055; lmsh.userData.part = 'loop'; grp.add(lmsh);
-    }
-  }
-  return grp;
-}
-function disposeGroup(grp) {
-  grp.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { for (const k of ['map', 'normalMap', 'displacementMap', 'alphaMap']) { const t = o.material[k]; if (t && !Object.values(SIDE).includes(t)) t.dispose(); } o.material.dispose(); } });
-}
-function makeEnv(renderer) {
-  const pm = new THREE.PMREMGenerator(renderer), sc = new THREE.Scene(), cv = mk(64, 256), x = cv.getContext('2d');
-  const gr = x.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, '#fff1d2'); gr.addColorStop(.45, '#a0603c'); gr.addColorStop(.56, '#3a1a12'); gr.addColorStop(1, '#120806');
-  x.fillStyle = gr; x.fillRect(0, 0, 64, 256);
-  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
-  sc.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), new THREE.MeshBasicMaterial({ map: t, side: THREE.BackSide })));
-  const lp = new THREE.Mesh(new THREE.PlaneGeometry(5, 3), new THREE.MeshBasicMaterial({ color: new THREE.Color(7, 6, 5), side: THREE.DoubleSide })); lp.position.set(-3, 5, 5); lp.lookAt(0, 0, 0); sc.add(lp);
-  const env = pm.fromScene(sc, .03).texture; pm.dispose(); return env;
-}
-function setupScene(renderer) {
-  const sc = new THREE.Scene(); sc.environment = makeEnv(renderer); sc.environmentIntensity = .55;
-  sc.add(new THREE.HemisphereLight(0xffe7c4, 0x2a1208, .7));
-  const key = new THREE.DirectionalLight(0xfff0d8, 2.6); key.position.set(-2, 2.4, 3); sc.add(key);
-  const fill = new THREE.DirectionalLight(0xffc49a, .55); fill.position.set(2.5, -.5, 2); sc.add(fill);
-  const rim = new THREE.DirectionalLight(0xffffff, 1.1); rim.position.set(0, 1, -3); sc.add(rim);
-  sc.userData.lights = [sc.children[0], key, fill, rim].map(l => ({ l, c: l.color.clone(), i: l.intensity }));
-  return sc;
-}
-function makeRenderer(opts) {
-  const r = new THREE.WebGLRenderer(opts); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.15; return r;
-}
+import { $, clamp, lerp, rng, hash, fmt, pick, esc, round100, wpick, inPoly, mk } from './util.js';
+import { SUBP, subsOf, subOf, RAR, REGIONS, CATS, isCoin, catOf, FRAMES, MATS, THW, TELLS, tellTxt, MODELS, LEVELS, UNLOCK, TEMPLES, PIMS, DW, mWeight, TOOLS, INGR, RECIPES, EVENTS, PAGES, LIVE_T, LIVE_Q, VIEWERS, LUCKY, NAME_A, NAME_B, ingrList, ingrKey, ingrTxt, mutIngr, UNIT, NAMES, HONEST, SLICK } from './data.js';
+import { poseFig, TW, TH, g, qb, OUT, outlinePts, inset, pathPts, dome, limb, slab, glyph, unalom, FIG, drawPidta, drawFigure, drawFront, drawBack, drawCode, boxBlur, noise, chan, makeFace } from './amulet2d.js';
+import { SIDE, sideTex, buildAmulet, disposeGroup, makeEnv, setupScene, makeRenderer } from './amulet3d.js';
 
 /* ================= main view ================= */
 const canvas = $('#c'), stage = $('#stage');
@@ -497,7 +46,7 @@ function applyUV() {
   for (const { l, c, i } of scene.userData.lights) { if (on) l.color.set(0x7b3cff); else l.color.copy(c); l.intensity = on ? i * .35 : i; }
   scene.environmentIntensity = on ? .05 : .55; stage.classList.toggle('uv', on);
   if (cur) cur.traverse(o => {
-    if (!o.isMesh || !o.userData.part) return;
+    if (!o.isMesh || !o.userData.part || o.userData.part === 'frame') return;
     const glow = on && cur.userData.resin, mt = o.material, em = glow ? mt.map : null;
     mt.emissive.set(glow ? 0x3dffd2 : 0x000000); mt.emissiveIntensity = glow ? 1.1 : 1;
     if (mt.emissiveMap !== em) { mt.emissiveMap = em; mt.needsUpdate = true; }
@@ -517,14 +66,13 @@ function layoutCmp() {
 }
 function toggleCmp() { if (!cur) return; V.cmp = !V.cmp; if (V.cmp) buildRef(); layoutCmp(); renderActs(); }
 function setCam(aspect) { cam.aspect = aspect; cam.updateProjectionMatrix(); cam.position.set(V.px, V.py, fitDist() * V.zoom); }
-function showAmulet(m, spec, cond, seed) {
+function showAmulet(m, spec, cond, seed, opts = {}) {
   clearAmulet(); curArgs = [m, spec, cond, seed];
-  cur = buildAmulet(m, spec, cond, seed, 1); holder.add(cur); applyUV(); if (V.cmp) buildRef(); layoutCmp();
+  cur = buildAmulet(m, spec, cond, seed, 1, opts); holder.add(cur); applyUV(); if (V.cmp) buildRef(); layoutCmp();
   holder.quaternion.identity(); rotBy(-.9, .12); V.vx = .03; V.vy = -.002; V.zt = 1; V.zoom = 1.25; V.px = V.py = 0; V.reset = null; V.spin = 0;
 }
 function clearAmulet() { if (cur) { holder.remove(cur); disposeGroup(cur); cur = null; } curArgs = null; clearRef(); layoutCmp(); }
 const RC = new THREE.Raycaster(), NDC = new THREE.Vector2();
-function inPoly(x, y, P) { let o = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) o = !o; } return o; }
 // ยิง ray จากจุดที่แตะไปที่องค์พระ คืนส่วนที่โดน (front/back พร้อมพิกัด canvas, body, loop)
 function pickPart(cx, cy) {
   if (!cur) return null;
@@ -535,16 +83,20 @@ function pickPart(cx, cy) {
   } else NDC.set((cx - rc.left) / rc.width * 2 - 1, -(cy - rc.top) / rc.height * 2 + 1);
   holder.updateMatrixWorld(); RC.setFromCamera(NDC, cam);
   for (const h of RC.intersectObjects(cur.children, true)) {
-    const part = h.object.userData.part; if (!part) continue;
+    const ud = h.object.userData, part = ud.part; if (!part || ud.see) continue;
     if (part === 'front' || part === 'back') { if (!h.uv || !inPoly(h.uv.x, 1 - h.uv.y, outlinePts(cur.userData.shape))) continue; return { part, px: h.uv.x * TW, py: (1 - h.uv.y) * TH }; }
-    return { part };
+    if (part === 'body' && cur.userData.framed) return { part: 'frame' };
+    return { part, tells: ud.tells };
   }
   return null;
 }
 // แปลงพิกัดบนหน้าพระ (canvas TW x TH) เป็นโซนของจุดสังเกต โดยเทียบกับ FIG ของพิมพ์
-function frontZone(shape, px, py) {
-  const { cx, by, s } = FIG[shape], dx = Math.abs(px - cx);
-  if (shape === 'pidta') return dx < s * .3 && py > by - s * 1.06 && py < by - s * .62 ? 'palm' : null;
+function frontZone(m, px, py) {
+  const shape = m.shape, pose = m.pose || 'seated', { cx, by, s } = poseFig(shape, pose), dx = Math.abs(px - cx), dy = (py - by) / s;
+  if (pose === 'monk') return dx < s * .5 && dy > -.45 && dy < .18 ? 'monkItem' : null;
+  if (pose === 'naga') return dx < s * .06 && dy < -.74 && dy > -1.12 ? 'flame' : dx < s * .46 && dy < -.5 && dy > -1.15 ? 'nagaHeads' : dx < s * .5 && dy > -.05 && dy < .3 ? 'base' : null;
+  if (pose === 'stand' || pose === 'walk') return dx < s * .08 && dy < -.88 && dy > -1.16 ? 'flame' : dx < s * .3 && dy > -.06 && dy < .12 ? 'base' : null;
+  if (pose === 'pidta') return dx < s * .3 && py > by - s * 1.06 && py < by - s * .62 ? 'palm' : null;
   if (shape === 'arch' && py < .88 * TH && inset(outlinePts('arch').slice(2), .85, .5, .56).some(([a, b]) => Math.hypot(a * TW - px, b * TH - py) < 26)) return 'dots';
   if (dx < s * .11 && py < by - s * .74 && py > by - s * 1.12) return 'flame';
   if (dx < s * .56 && py >= by - s * .04 && py < by + s * .32) return 'base';
@@ -555,10 +107,13 @@ const ZONE_KEYS = { base: ['petals', 'tiers'], body: ['edge', 'thick'], back: ['
 const shortLabel = k => TELLS[k].label.replace(/\s*\(.*\)/, '');
 // ตำแหน่ง (local) ของจุดสังเกตบนองค์พระ สำหรับไฮไลต์
 function keyPos(k) {
-  const u = cur.userData, f = FIG[u.shape], z = u.thick / 2 + u.D + .006;
+  const u = cur.userData; if (u.kp) return u.kp[k] || [new THREE.Vector3(0, 0, .3), 0, 0];
+  const pose = u.pose || 'seated', f = poseFig(u.shape, pose), z = u.thick / 2 + u.D + .006;
   const c2l = (px, py, sgn = 1) => [new THREE.Vector3(px / TW - .5, (.5 - py / TH) * 1.25, sgn * z), sgn < 0 ? Math.PI : 0];
   switch (k) {
-    case 'flame': return c2l(f.cx, f.by - f.s * .9);
+    case 'flame': return c2l(f.cx, f.by - f.s * (pose === 'stand' || pose === 'walk' ? 1.02 : .9));
+    case 'nagaHeads': return c2l(f.cx, f.by - f.s * .95);
+    case 'monkItem': return c2l(f.cx - f.s * .15, f.by - f.s * .2);
     case 'hand': return c2l(f.cx - f.s * .24, f.by - f.s * .3);
     case 'petals': case 'tiers': return c2l(f.cx, f.by + f.s * .1);
     case 'dots': return c2l(TW / 2, TH * .13);
@@ -573,10 +128,10 @@ function keyPos(k) {
 const HL = [];
 function highlight(k, ms = 1000) {
   if (!cur) return;
-  const [pos, ry] = keyPos(k), big = ['back', 'grain', 'resin', 'weight'].includes(k), r0 = big ? .2 : .085;
+  const [pos, ry, rx = 0] = keyPos(k), big = ['back', 'grain', 'resin', 'weight', 'finish', 'ingr'].includes(k), r0 = big ? .2 : .085;
   const mk2 = (geo, op) => { const o = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: op, depthWrite: false, toneMapped: false, side: THREE.DoubleSide })); o.renderOrder = 10; o.userData.op = op; return o; };
   const mesh = new THREE.Group(); mesh.add(mk2(new THREE.RingGeometry(r0, r0 + .03, 48), 1), mk2(new THREE.CircleGeometry(r0, 48), .22));
-  mesh.position.copy(pos); mesh.rotation.y = ry; cur.add(mesh);
+  mesh.position.copy(pos); mesh.rotation.set(rx, ry, 0); cur.add(mesh);
   HL.push({ mesh, grp: cur, t0: performance.now(), ms });
 }
 function tickHL() {
@@ -596,6 +151,7 @@ function frame() {
   V.zoom += (V.zt - V.zoom) * .18;
   if (V.zt >= .99 && !V.drag) { V.px *= .88; V.py *= .88; }
   $('#loupe').style.opacity = V.zoom < .5 && !V.cmp ? 1 : 0;
+  const st = (performance.now() - (V.shake || 0)) / 600; holder.position.x = st < 1 && !reduce ? Math.sin(st * 60) * .025 * (1 - st) : 0;
   tickHL(); if (++tutTick % 8 === 0) checkTut();
   const W = stage.clientWidth, H = stage.clientHeight;
   if (V.cmp && ref && cur) {
@@ -657,6 +213,11 @@ function whoosh(a, t, dur, f0, f1, vol) {
   src.connect(bp).connect(gn).connect(OUTG); src.start(t); src.stop(t + dur);
 }
 const SFX = {
+  // เขย่าพระกริ่ง: แท้ = เม็ดกริ่งใสกังวาน, เก๊ = ทึบ; เบี้ยแก้: แท้ = ปรอทไหลซ่า, เก๊ = แห้ง
+  ring: (a, t) => { for (let i = 0; i < 8; i++) bell(a, t + i * .075 + Math.random() * .03, 2400 + Math.random() * 1200, .35, .07); },
+  dull: (a, t) => { for (let i = 0; i < 6; i++) tone(a, t + i * .08 + Math.random() * .02, 130 + Math.random() * 70, .07, { type: 'triangle', vol: .16 }); },
+  merc: (a, t) => { whoosh(a, t, .9, 3200, 1400, .22); whoosh(a, t + .45, .8, 2600, 1100, .16); for (let i = 0; i < 5; i++) tone(a, t + .1 + i * .15, 5200 + Math.random() * 800, .05, { vol: .025 }); },
+  dry: (a, t) => { for (let i = 0; i < 5; i++) tone(a, t + i * .09 + Math.random() * .03, 900 + Math.random() * 300, .03, { type: 'square', vol: .04 }); },
   // รับเช่า: เหรียญกระทบกันสองที + เสียงวางพระลงถาด
   buy: (a, t) => { tone(a, t, 180, .12, { type: 'triangle', vol: .25, f2: 90 }); bell(a, t + .04, 1568, .5, .14); bell(a, t + .14, 2093, .7, .12); },
   // พลิกพระ: ลมพลิก + เสียงองค์พระแตะถาด
@@ -671,12 +232,13 @@ function sfx(name) { const a = audio(); if (!a || !SFX[name]) return; try { SFX[
 
 /* ================= state ================= */
 const KEY = 'sianphra_v1';
-function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 }, tools: {}, loan: { amt: 0, day: 0 }, shareBan: 0, trust: {}, templeBan: {}, recipes: {}, kaka: false, ask: { day: 0, used: 0 }, tut: { on: true, step: 0 } }; }
+function newGame() { return { v: 1, seed: Math.floor(Math.random() * 1e9), money: 60000, xp: 0, rep: 10, day: 1, inv: [], queue: [], rejected: [], batches: [], custom: [], contestDay: 0, nextId: 1, seen: false, lvlSeen: 1, stats: { bought: 0, sold: 0, fooled: 0, spotted: 0 }, tools: {}, loan: { amt: 0, day: 0 }, shareBan: 0, trust: {}, templeBan: {}, recipes: {}, kaka: false, ask: { day: 0, used: 0 }, tut: { on: true, step: 0 }, owned: {} }; }
 let S = null; try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
 if (!S || S.v !== 1) { S = newGame(); }
 S.stats.spotted = S.stats.spotted || 0; S.tools = S.tools || {};
 S.loan = S.loan || { amt: 0, day: 0 }; S.shareBan = S.shareBan || 0;
 S.ask = S.ask || { day: 0, used: 0 }; S.tut = S.tut || { on: false };
+S.owned = S.owned || Object.fromEntries(S.inv.filter(i => i.genuine && !i.consign).map(i => [i.modelId, true]));
 // จัดสร้าง: ความไว้ใจวัด, วัดที่แบน, ตำรับที่พบ, ดินกากยายักษ์ และค่าเริ่มต้นของ batch จากเซฟเก่า (hype 30 heat 0)
 function normTemple() {
   S.trust = S.trust || {}; for (const t of TEMPLES) if (S.trust[t.id] == null) S.trust[t.id] = 50;
@@ -729,7 +291,7 @@ function fakeOwn(spec, r) {
   return s;
 }
 // Lv.1–2: ของเก๊ผิดแบบเห็นชัด ต้องมีจุดผิดที่เห็นจากด้านหน้าอย่างน้อย 1 จุด (จึงไม่มีทางผิดแค่ผิวเนื้ออย่างเดียว)
-const FRONT_KEYS = ['hand', 'flame', 'tiers', 'petals', 'dots', 'palm'];
+const FRONT_KEYS = ['hand', 'flame', 'tiers', 'petals', 'dots', 'palm', 'nagaHeads', 'monkItem', 'finish', 'seam', 'turns', 'cord', 'braid', 'chan', 'wrap'];
 function easyFake(spec, n, r) {
   let s = mutate(spec, n, r, 'easy');
   if (!Object.keys(spec).some(k => FRONT_KEYS.includes(k) && s[k] !== spec[k])) {
@@ -761,9 +323,13 @@ function makeCustomer(r, L) {
   const nk = Math.min(n, Object.keys(m.spec).length);
   const spec = genuine ? { ...m.spec } : god ? { ...m.spec, ...(r() < .5 ? { resin: 'yes' } : { weight: r() < .5 ? 'light' : 'heavy' }) } : L <= 2 ? easyFake(m.spec, nk, r) : mutate(m.spec, nk, r, L >= 5 ? 'fine' : undefined);
   const cond = Math.round(genuine ? 62 + r() * 38 : 72 + r() * 28);
-  const market = m.price * cf(cond), ask = round100(market * (genuine ? .55 + r() * .6 : .45 + r() * .5));
+  // พิมพ์ย่อย: พิมพ์จริง (spec.sub) กับพิมพ์ที่ลูกค้าอ้าง (claim) บางคนอ้างพิมพ์นิยมเกินจริง — ไม่ใช่ของเก๊ แต่จ่ายแพงเกินถ้าเชื่อ
+  const subs = subsOf(m); let claim = null;
+  if (subs) { const act = wpick(r, subs.map(x => [x, x.w])), up = subs.filter(x => x.mult > act.mult); spec.sub = act.id; claim = (up.length && r() < .25 ? pick(r, up) : act).id; }
+  const market = m.price * (claim ? subOf(m, claim).mult : 1) * cf(cond), ask = round100(market * (genuine ? .55 + r() * .6 : .45 + r() * .5));
   const honest = genuine ? r() < .65 : r() < .35;
-  return { id: S.nextId++, name: pick(r, NAMES), line: pick(r, honest ? HONEST : SLICK), modelId: m.id, genuine, spec, cond, ask, patience: 1 + Math.floor(r() * 3), seed: Math.floor(r() * 1e9) };
+  const frame = m.kind === 'flat' && r() < .2 ? wpick(r, Object.entries(FRAMES).map(([k, F]) => [k, 1 / F.w])) : null;
+  return { id: S.nextId++, name: pick(r, NAMES), line: pick(r, honest ? HONEST : SLICK), modelId: m.id, genuine, spec, cond, ask, patience: 1 + Math.floor(r() * 3), seed: Math.floor(r() * 1e9), claim, frame };
 }
 function genQueue() { const r = rng(hash('d' + S.day + ':' + S.seed)), L = lvl(); S.queue = []; for (let i = 0, n = 4 + Math.floor(L / 2); i < n; i++) S.queue.push(makeCustomer(r, L)); }
 if (!S.queue.length && S.day === 1 && !S.inv.length) { genQueue(); if (S.tut.on) S.queue.unshift(...tutCustomers()); }
@@ -777,6 +343,8 @@ function loadStage() {
   if (mode === 'own' && ownItem) { key = 'i' + ownItem.id; args = [modelById(ownItem.modelId), ownItem.spec, ownItem.cond, ownItem.seed]; }
   else if (mode === 'daily') { const it = DS[D.run.idx]; key = 'd' + D.run.date + ':' + D.run.idx; args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (S.queue[0]) { const c = S.queue[0]; key = 'c' + c.id; args = [modelById(c.modelId), c.spec, c.cond, c.seed]; }
+  const pc = curPiece(), fr = pc && pc.frame && !pc.open ? pc.frame : null; if (args) { args.push({ frame: fr }); key += fr ? ':f' : ''; }
+  if (key && lastShown && key.replace(':f', '') === lastShown.replace(':f', '') && key !== lastShown) { lastShown = key; const q = holder.quaternion.clone(); showAmulet(...args); holder.quaternion.copy(q); V.vx = V.vy = 0; return; }
   if (key === lastShown) return; lastShown = key; CL = { key, marks: {}, open: CL.open };
   if (args) showAmulet(...args); else clearAmulet();
 }
@@ -801,6 +369,7 @@ function render() {
   if (lvl() > S.lvlSeen && $('#modal').hidden) { const html = levelHTML(); if (html) openModal(html); }
   save();
 }
+const rarBadge = m => { const r0 = RAR[m.rar || 'common']; return `<span class="badge rar-${r0[1]}">${r0[0]}</span>`; };
 function specFacts(m, o) { return `<span>${esc(MATS[m.mat].name)}</span>` + (S.tools.scale && o ? `<span>ตาชั่ง <b>${gramsOf(o).toFixed(1)} ก.</b></span>` : ''); }
 function renderCard() {
   const el = $('#card');
@@ -821,17 +390,17 @@ function renderCard() {
     const st = it.pend ? '<span class="badge">รอผลตรวจ</span>' : it.cert === true ? '<span class="badge good">ใบรับรองแท้</span>' : it.cert === false ? '<span class="badge bad">ของเก๊</span>' : '<span class="badge">ยังไม่ได้ตรวจ</span>';
     const line = it.consign ? `ฝากขายโดย${esc(it.consign.owner)} • ขายได้จ่ายเจ้าของ ${fmt(it.consign.price)} • เหลือ ${it.consign.until - S.day} วัน` : it.share ? `ลงหุ้น 50% กับเซียนเพื่อน • ขายได้แบ่งคนละครึ่ง` : `รับเช่ามาเมื่อวันที่ ${it.day}`;
     el.innerHTML = `<div class="ava">ตู้</div><div><div class="who">${it.consign ? 'ของฝากขาย' : 'องค์ในตู้ของคุณ'} ${st} ${tagsOf(it)}${it.award ? ` <span class="badge gold">ติดรางวัล</span>` : ''}</div><div class="line">${line}</div></div>
-      <div class="pname">${esc(m.name)}</div>
-      <div class="facts">${specFacts(m, it)}<span>สภาพ <b>${it.cond}/100</b></span>${it.consign ? '' : `<span>ทุน${it.share ? 'ส่วนของคุณ' : ''} <b>${fmt(it.paid)}</b></span>`}${it.cert !== false && !it.pend ? `<span>มีคนให้เช่า <b>${fmt(offerFor(it))}</b></span>` : ''}</div>`;
+      <div class="pname">${esc(m.name)} ${rarBadge(m)}</div>
+      <div class="facts">${specFacts(m, it)}${subOf(m, it.claim) ? `<span>${it.cert === true ? `ผลตรวจ: <b>${esc(subOf(m, it.spec.sub).name)}</b>` : `ผู้ขายบอกว่า <b>${esc(subOf(m, it.claim).name)}</b>`}</span>` : ''}${it.frame ? `<span>${esc(FRAMES[it.frame].name)}</span>` : ''}<span>สภาพ <b>${it.cond}/100</b></span>${it.consign ? '' : `<span>ทุน${it.share ? 'ส่วนของคุณ' : ''} <b>${fmt(it.paid)}</b></span>`}${it.cert !== false && !it.pend ? `<span>มีคนให้เช่า <b>${fmt(offerFor(it))}</b></span>` : ''}</div>`;
     return;
   }
   const c = S.queue[0];
   if (!c) { el.innerHTML = `<div class="ava">ว่าง</div><div><div class="who">หน้าร้านว่าง</div><div class="line">วันที่ ${S.day} • ลูกค้าวันนี้มาครบแล้ว</div></div>`; return; }
-  const m = modelById(c.modelId);
+  const m = modelById(c.modelId), cs = subOf(m, c.claim);
   el.innerHTML = `<div class="ava">${esc(c.name.replace(/^(ลุง|ป้า|เฮีย|เจ๊|พี่|น้อง|ตา|คุณ|ยาย|เสี่ย|น้า|อาจารย์)/, '').slice(0, 1))}</div>
     <div><div class="who">${esc(c.name)} <span class="badge" title="ความอดทนในการต่อราคา">อดทน ${'●'.repeat(c.patience)}${'○'.repeat(Math.max(0, 3 - c.patience))}</span></div><div class="line">“${esc(c.line)}”</div></div>
-    <div class="pname">${esc(m.name)}</div>
-    <div class="facts">${specFacts(m, c)}<span>สภาพ <b>${c.cond}/100</b></span><span>ราคาตลาดถ้าแท้ <b>${fmt(m.price * cf(c.cond))}</b></span><span>ขอให้เช่า <b>${fmt(c.ask)}</b></span></div>`;
+    <div class="pname">${esc(m.name)} ${rarBadge(m)}</div>
+    <div class="facts">${specFacts(m, c)}${cs ? `<span>ลูกค้าบอกว่า <b>${esc(cs.name)}</b></span>` : ''}${c.frame ? `<span>${esc(FRAMES[c.frame].name)}${c.open ? ' (ถอดแล้ว)' : ''}</span>` : ''}<span>สภาพ <b>${c.cond}/100</b></span><span>ราคาตลาดถ้าแท้${cs ? 'ตามพิมพ์ที่บอก' : ''} <b>${fmt(m.price * (cs ? cs.mult : 1) * cf(c.cond))}</b></span><span>ขอให้เช่า <b>${fmt(c.ask)}</b></span></div>`;
 }
 // แถวบน = เครื่องมือส่อง, แถวล่าง = การตัดสินใจ (ไม่เกิน 4 ปุ่มต่อแถว อ่านง่ายบนจอ 360px)
 const tagsOf = it => (it.consign ? `<span class="badge cons">ฝากขาย • เหลือ ${it.consign.until - S.day} วัน</span>` : '') + (it.share ? '<span class="badge shr">หุ้น 50%</span>' : '');
@@ -843,7 +412,7 @@ function renderActs() {
     let row2 = `<button class="btn dim" data-a="back">กลับหน้าร้าน</button>`;
     if (it.cert === false) row2 += it.consign ? `<button class="btn no span2" data-a="scrap">คืนพระให้เจ้าของ</button>` : `<button class="btn no span2" data-a="scrap">ทิ้ง / ขายเป็นของที่ระลึก<small>${fmt(it.share ? Math.round(scrapVal(it) / 2) : scrapVal(it))}</small></button>`;
     else if (it.pend) row2 += `<button class="btn span2" disabled>รอผลตรวจถึงพรุ่งนี้</button>`;
-    else row2 += (it.cert ? '' : `<button class="btn" data-a="cert">ส่งตรวจ<small>${fmt(fee)}</small></button>`) + `<button class="btn ok ${it.cert ? 'span2' : ''}" data-a="sell">ปล่อยเช่า<small>${fmt(offerFor(it))}${it.consign || it.share ? ` • ได้ ${fmt(myCut(it, offerFor(it)))}` : ''}</small></button>`;
+    else row2 += (modelById(it.modelId).kind === 'flat' && !it.frame && !it.consign ? `<button class="btn" data-a="framesvc">เลี่ยมกรอบ</button>` : '') + (it.cert ? '' : `<button class="btn" data-a="cert">ส่งตรวจ<small>${fmt(fee)}</small></button>`) + `<button class="btn ok ${it.cert ? 'span2' : ''}" data-a="sell">ปล่อยเช่า<small>${fmt(offerFor(it))}${it.consign || it.share ? ` • ได้ ${fmt(myCut(it, offerFor(it)))}` : ''}</small></button>`;
     el.innerHTML = rows(toolBtns(), row2);
   } else if (mode === 'daily') {
     el.innerHTML = rows(toolBtns(), D.run.rev ? `<button class="btn dim" data-a="dexit">ออก</button><button class="btn ok span2" data-a="dnext">${D.run.idx >= 4 ? 'ดูผลสรุป' : 'องค์ถัดไป'}</button>`
@@ -872,7 +441,11 @@ function negotiate() {
   else { c.ask = round100(c.ask * (1 - (.06 + Math.random() * .09))); c.line = `โอเค ๆ ลดให้เหลือ ${fmt(c.ask)} ก็แล้วกัน`; }
   render();
 }
-function takeItem(c, extra) { S.inv.unshift({ id: c.id, modelId: c.modelId, spec: c.spec, genuine: c.genuine, cond: c.cond, seed: c.seed, paid: c.ask, ask: c.ask, cert: null, pend: 0, award: 0, day: S.day, xp: false, ...extra }); }
+function takeItem(c, extra) {
+  S.inv.unshift({ id: c.id, modelId: c.modelId, spec: c.spec, genuine: c.genuine, cond: c.cond, seed: c.seed, paid: c.ask, ask: c.ask, cert: null, pend: 0, award: 0, day: S.day, xp: false, claim: c.claim || null, frame: c.frame || null, open: !!c.open, ...extra });
+  if (c.genuine && !(extra && extra.consign)) S.owned[c.modelId] = true;
+}
+const subMult = it => { const m = modelById(it.modelId), x = subOf(m, it.spec && it.spec.sub); return x ? x.mult : 1; };
 function buy() {
   const c = S.queue[0];
   if (S.money < c.ask) { openModal(shortHTML()); return; }
@@ -962,8 +535,9 @@ function onTap(x, y) {
   if (!spotting() || spot.busy) return;
   const hit = pickPart(x, y), m = modelById(S.queue[0].modelId);
   if (!hit) { toast('แตะให้โดนองค์พระ หรือกด "เลือกจากรายการ"'); return; }
-  const zone = hit.part === 'front' ? frontZone(m.shape, hit.px, hit.py) : hit.part;
-  const keys = (ZONE_KEYS[zone] || [zone]).filter(k => k && k in m.spec);
+  const zone = hit.part === 'front' ? frontZone(m, hit.px, hit.py) : hit.part;
+  if (zone === 'frame') { toast('กรอบบังขอบอยู่ กด "ถอดกรอบ" ก่อนจึงดูขอบและความหนาได้'); return; }
+  const keys = (hit.tells || ZONE_KEYS[zone] || [zone]).filter(k => k && k in m.spec);
   if (!keys.length) { toast('ตรงนี้ไม่ใช่จุดสังเกต ลองแตะจุดอื่น'); return; }
   commitSpot(keys);
 }
@@ -988,7 +562,7 @@ function renderSpotBar() {
 }
 const certFee = it => round100(Math.max(500, modelById(it.modelId).price * .03));
 const scrapVal = it => round100(modelById(it.modelId).price * .02);
-function offerFor(it) { const m = modelById(it.modelId), r = rng(hash(it.id + ':' + S.day)); return round100(m.price * cf(it.cond) * (it.cert ? 1.15 : 1) * (1 + .1 * it.award) * (1 + S.rep / 300) * (.9 + r() * .18)); }
+function offerFor(it) { const m = modelById(it.modelId), r = rng(hash(it.id + ':' + S.day)); return (it.frame ? FRAMES[it.frame].val : 0) + round100(m.price * subMult(it) * cf(it.cond) * (it.cert ? 1.15 : 1) * (1 + .1 * it.award) * (1 + S.rep / 300) * (.9 + r() * .18)); }
 function revealXP(it) { const m = modelById(it.modelId); it.xp = true; return 15 + clamp(Math.round((m.price * cf(it.cond) - (it.ask ?? it.paid)) / (m.price * .05)), 0, 20) * 2; }
 // ส่วนที่เป็นของผู้เล่นเมื่อขายได้ p: ฝากขาย = ส่วนเกินราคาเจ้าของ (ขั้นต่ำ 10%), หุ้น = ครึ่งหนึ่ง
 function myCut(it, p) { return it.consign ? Math.max(p - it.consign.price, round100(p * .1)) : it.share ? Math.round(p / 2) : p; }
@@ -1019,7 +593,7 @@ function endDay() {
   const lines = [], L0 = lvl(), shows = [];
   for (const it of S.inv) if (it.pend) {
     it.pend = 0; it.cert = it.genuine; const m = modelById(it.modelId);
-    if (it.genuine) { const x = it.xp ? 0 : revealXP(it); gainXP(x); lines.push(['good', `ผลตรวจ ${m.name}: แท้ ได้ใบรับรอง${x ? ` (+${x} XP)` : ''}`]); }
+    if (it.genuine) { const x = it.xp ? 0 : revealXP(it), sb = subOf(m, it.spec.sub), cl = subOf(m, it.claim); gainXP(x); lines.push(['good', `ผลตรวจ ${m.name}: แท้ ได้ใบรับรอง${sb ? ` เป็น${sb.name}${cl && cl.id !== sb.id ? ` (ไม่ใช่${cl.name}ตามที่ผู้ขายบอก)` : ''}` : ''}${x ? ` (+${x} XP)` : ''}`]); }
     else { it.xp = true; gainXP(3); S.stats.fooled++; shows.push({ modelId: it.modelId, spec: it.spec, cond: it.cond, seed: it.seed, title: `โดนหลอก: ${m.name}` }); lines.push(['bad', `ผลตรวจ ${m.name}: ไม่แท้${it.consign ? ' (ของฝากขาย คืนเจ้าของได้)' : ` เสียเงินไป ${fmt(it.paid)}`}${shareFake(it)}`]); }
   }
   if (S.rejected.length) {
@@ -1129,15 +703,31 @@ function clHTML() {
 const askLeft = () => S.ask.day === S.day ? Math.max(0, 3 - S.ask.used) : 3;
 const askCost = () => 2000 * lvl();
 function renderChips() {
-  const el = $('#chips'), it = curPiece(), on = !!it && !spotting();
+  const el = $('#chips'), it = curPiece(), on = !!it; stage.classList.toggle('spotting', spotting());
   el.hidden = !on; $('#clp').hidden = !(on && CL.open);
   if (!on) return;
   const nm = Object.keys(CL.marks).length, canAsk = mode !== 'daily';
-  el.innerHTML = `<button class="chip" id="clBtn" aria-expanded="${CL.open}">เช็กลิสต์${nm ? ` ${nm}` : ''}</button>` + (canAsk ? `<button class="chip" id="askBtn">ถามอาจารย์<small>${it.teach ? 'ดูคำตอบเดิม' : askLeft() ? `เหลือ ${askLeft()} ครั้ง` : fmt(askCost())}</small></button>` : '');
+  const m = modelById(it.modelId), canShake = m && ('rattle' in m.spec || 'mercury' in m.spec);
+  el.innerHTML = (it.frame ? `<button class="chip" id="frameBtn">${it.open ? 'ใส่กรอบกลับ' : 'ถอดกรอบ'}<small>${esc(FRAMES[it.frame].name)}</small></button>` : '') + (canShake ? `<button class="chip" id="shakeBtn">เขย่า</button>` : '') + `<button class="chip" id="clBtn" aria-expanded="${CL.open}">เช็กลิสต์${nm ? ` ${nm}` : ''}</button>` + (canAsk ? `<button class="chip" id="askBtn">ถามอาจารย์<small>${it.teach ? 'ดูคำตอบเดิม' : askLeft() ? `เหลือ ${askLeft()} ครั้ง` : fmt(askCost())}</small></button>` : '');
   if (CL.open) $('#clp').innerHTML = clHTML();
 }
+function shakePiece() {
+  const it = curPiece(); if (!it) return; const sp = it.spec; V.shake = performance.now();
+  sfx('rattle' in sp ? (sp.rattle === 'clear' ? 'ring' : 'dull') : sp.mercury === 'flow' ? 'merc' : 'dry');
+  if (S.mute) toast('เปิดเสียงประกอบในเมนูก่อน ถึงจะได้ยินเสียงเขย่า');
+}
+// กรอบ: หน้าร้านถอดได้แต่ลูกค้าเสียความอดทน 1 (ถ้าหมดความอดทนจะไม่ยอม) • ในตู้ถอด/ใส่ได้ฟรี
+function toggleFrame() {
+  const it = curPiece(); if (!it || !it.frame) return;
+  if (mode === 'shop' && !it.open) { if (it.patience <= 0) { toast(`${it.name}ไม่ยอมให้ถอดกรอบ`, 'bad'); return; } it.patience--; toast('ถอดกรอบแล้ว ดูขอบและความหนาได้ (ลูกค้าเสียความอดทน 1)'); }
+  it.open = !it.open; save(); render();
+}
+function frameSvcHTML() {
+  return `<h2>เลี่ยมกรอบ</h2><p class="note">กรอบช่วยกันกระแทก และกรอบทองเพิ่มราคาตอนปล่อยเช่า</p><div class="opts">` + Object.entries(FRAMES).map(([k, F]) => `<button class="btn opt" data-frame="${k}" ${S.money < F.cost ? 'disabled' : ''}><b>${esc(F.name)} ${fmt(F.cost)}</b><small>${S.money < F.cost ? 'เงินไม่พอ' : `มูลค่าเพิ่มตอนปล่อยเช่า ${fmt(F.val)}`}</small></button>`).join('') + `</div><div class="row"><button class="btn dim" data-close>ยกเลิก</button></div>`;
+}
+function doFrame(k) { const it = ownItem, F = FRAMES[k]; if (!it || !F || it.frame || S.money < F.cost) return; S.money -= F.cost; it.frame = k; it.open = false; closeModal(); toast(`เลี่ยม${F.name}แล้ว`, 'good'); render(); }
 // ถามอาจารย์: บอกบริเวณกว้าง ๆ ไม่ฟันธงตรง ๆ
-const AREA = { flame: 'พระเกศเหนือเศียร', hand: 'แขนกับมือ', petals: 'ฐานใต้ตัก', tiers: 'ฐานใต้ตัก', dots: 'แนวเม็ดรอบซุ้ม', palm: 'มือที่ปิดหน้า', back: 'ด้านหลัง', code: 'ด้านหลังตรงโค้ด', edge: 'ขอบข้าง', thick: 'ด้านข้าง ดูความหนา', loop: 'หูเหรียญ', grain: 'ผิวเนื้อ ส่องใกล้ ๆ', ingr: 'เนื้อพระ ส่องหามวลสาร', resin: 'เนื้อพระ ลองใช้ไฟ UV', weight: 'น้ำหนัก ลองชั่งดู' };
+const AREA = { nagaHeads: 'พังพานนาคเหนือเศียร', monkItem: 'ไหล่กับหน้าอก', finish: 'ผิวที่ตกแต่ง', seam: 'ข้างองค์ ดูตะเข็บ', kcode: 'ใต้ฐาน', rattle: 'เสียงเขย่า', turns: 'ปลายม้วน นับรอบ', cord: 'เชือกที่ถัก', braid: 'ลายถักเชือก', chan: 'ชันโรงด้านล่าง', wrap: 'ลายถักหุ้ม', mercury: 'เสียงเขย่า', flame: 'พระเกศเหนือเศียร', hand: 'แขนกับมือ', petals: 'ฐานใต้ตัก', tiers: 'ฐานใต้ตัก', dots: 'แนวเม็ดรอบซุ้ม', palm: 'มือที่ปิดหน้า', back: 'ด้านหลัง', code: 'ด้านหลังตรงโค้ด', edge: 'ขอบข้าง', thick: 'ด้านข้าง ดูความหนา', loop: 'หูเหรียญ', grain: 'ผิวเนื้อ ส่องใกล้ ๆ', ingr: 'เนื้อพระ ส่องหามวลสาร', resin: 'เนื้อพระ ลองใช้ไฟ UV', weight: 'น้ำหนัก ลองชั่งดู' };
 function askTeacher() {
   const it = curPiece(); if (!it || mode === 'daily') return;
   if (!it.teach) {
@@ -1284,26 +874,47 @@ $('#mx').onclick = closeModal;
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
 addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#modal').hidden) closeModal(); });
 
+// สมุด: หมวด + ค้นหา + ตัวกรอง (ภาค ความหายาก เลเวล) + สมุดสะสม (✓ รุ่นที่เคยครอบครองของแท้) แถวย่อ แตะเพื่อดูละเอียด
+const BK = { cat: 'phra', q: '', region: '', rar: '', lv: '', open: null, seen: null };
+const bookCur = () => mode === 'own' && ownItem ? ownItem.modelId : mode === 'daily' && DS ? DS[D.run.idx].modelId : S.queue[0]?.modelId;
 function bookHTML() {
-  const L = lvl(), curId = mode === 'own' && ownItem ? ownItem.modelId : mode === 'daily' ? DS[D.run.idx].modelId : S.queue[0]?.modelId;
-  const list = MODELS.concat(S.custom).slice().sort((a, b) => (b.id === curId) - (a.id === curId));
-  return `<h2>สมุดองค์ครู</h2><div class="row" style="margin:0 0 8px"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="recipeBtn">ตำรับที่ค้นพบ</button></div><p class="note">เทียบองค์ที่กำลังส่องกับองค์ครู (ของแท้) ของเก๊จะผิดจากองค์ครูอย่างน้อย 1 จุด หมุนดูทั้งหน้า หลัง และขอบข้าง แล้วใช้ "ส่อง" ดูผิวเนื้อใกล้ ๆ</p>` +
-    list.map(m => {
-      if (m.lvl > L && !m.custom && m.id !== curId) return `<div class="mdl"><b>${esc(m.name)}</b> <span class="badge">ปลดล็อก Lv.${m.lvl}</span></div>`;
-      return `<div class="mdl ${m.id === curId ? 'cur' : ''}"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font:600 18px Kanit,sans-serif">${esc(m.name)}</b>${m.id === curId ? '<span class="badge gold">กำลังส่ององค์นี้</span>' : ''}</div>
-      <div class="note">${esc(MATS[m.mat].name)} • ราคาตลาดสภาพสมบูรณ์ ${fmt(m.price)}</div>
-      <div class="views" data-thumb="m:${m.id}"><figure><img alt="ด้านหน้า"><figcaption>ด้านหน้า</figcaption></figure><figure><img alt="ด้านหลัง"><figcaption>ด้านหลัง</figcaption></figure><figure><img alt="ด้านข้าง"><figcaption>ด้านข้าง</figcaption></figure></div>
-      <table class="tells">${Object.entries(m.spec).map(([k, v]) => `<tr><td>${TELLS[k].label}</td><td>${esc(tellTxt(k, v))}</td></tr>`).join('')}
+  const curId = bookCur(), cm = curId && modelById(curId);
+  if (cm && BK.seen !== curId) { BK.seen = curId; BK.cat = catOf(cm); BK.open = curId; }
+  const sel = (k, opts, lab) => `<select data-bkf="${k}" aria-label="${lab}">${opts.map(([v, n]) => `<option value="${v}" ${BK[k] === v ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>`;
+  return `<h2>สมุดองค์ครู</h2><div class="row" style="margin:0 0 8px"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="recipeBtn">ตำรับที่ค้นพบ</button></div>
+    <p class="note">สมุดสะสม: ครอบครองของแท้แล้ว <b>${MODELS.filter(m => S.owned[m.id]).length}/${MODELS.length}</b> รุ่น • แตะรุ่นเพื่อดูองค์ครู 3 ด้าน จุดสังเกต และพิมพ์ย่อย</p>
+    <div class="bkcats" role="tablist">${Object.entries(CATS).map(([k, n]) => `<button class="bkc ${BK.cat === k ? 'on' : ''}" data-bkcat="${k}" role="tab" aria-selected="${BK.cat === k}">${n}</button>`).join('')}</div>
+    <div class="bkf"><input id="bkq" type="search" placeholder="ค้นหาชื่อรุ่นหรือวัด" value="${esc(BK.q)}" autocomplete="off">
+    ${sel('region', [['', 'ทุกภาค'], ...Object.entries(REGIONS)], 'ภาค')}${sel('rar', [['', 'ทุกความหายาก'], ...Object.entries(RAR).map(([k, v]) => [k, v[0]])], 'ความหายาก')}${sel('lv', [['', 'ทุกเลเวล'], ...[1, 2, 3, 4, 5, 6].map(l => [String(l), 'Lv.' + l]), ['c', 'รุ่นที่จัดสร้างเอง']], 'เลเวล')}</div>
+    <div id="bkList">${bookList()}</div>`;
+}
+function bookList() {
+  const L = lvl(), curId = bookCur(), q = BK.q.trim();
+  const list = MODELS.concat(S.custom).filter(m => catOf(m) === BK.cat && (!q || m.name.includes(q)) && (!BK.region || m.region === BK.region) && (!BK.rar || (m.rar || 'common') === BK.rar) && (!BK.lv || (m.custom ? 'c' : String(m.lvl)) === BK.lv))
+    .sort((a, b) => (b.id === curId) - (a.id === curId) || (a.custom ? 99 : a.lvl) - (b.custom ? 99 : b.lvl));
+  return list.length ? list.map(m => bookRow(m, L, curId)).join('') : '<p class="note">ไม่พบรุ่นที่ตรงกับตัวกรอง</p>';
+}
+function bookRow(m, L, curId) {
+  const locked = m.lvl > L && !m.custom && m.id !== curId, k = 'bk' + hash(m.id), open = !locked && BK.open === m.id;
+  if (!locked) XA.set(k, [m, m.spec, 100, 4242]);
+  const head = `<button class="bkr" data-bkopen="${esc(m.id)}" aria-expanded="${open}"><span class="bkt">${locked ? '🔒' : `<img data-thumb="x:${k}" alt="">`}</span><span class="bkn"><b>${esc(m.name)}</b>
+    <small>${m.custom ? 'รุ่นที่คุณจัดสร้าง' : esc(REGIONS[m.region] || '')} • ${locked ? `ปลดล็อก Lv.${m.lvl}` : `${esc(MATS[m.mat].name)} • Lv.${m.custom ? '-' : m.lvl}`}</small><span>${rarBadge(m)}${S.owned[m.id] ? ' <span class="badge good">✓ เคยครอบครอง</span>' : ''}${m.id === curId ? ' <span class="badge gold">กำลังส่อง</span>' : ''}</span></span></button>`;
+  if (!open) return `<div class="mdl bk ${m.id === curId ? 'cur' : ''}">${head}</div>`;
+  const subs = subsOf(m);
+  return `<div class="mdl bk ${m.id === curId ? 'cur' : ''}">${head}
+    <div class="note">ราคาตลาดสภาพสมบูรณ์ ${fmt(m.price)}${subs ? ' (พิมพ์มาตรฐาน)' : ''}</div>
+    <div class="views" data-thumb="m:${esc(m.id)}"><figure><img alt="ด้านหน้า"><figcaption>ด้านหน้า</figcaption></figure><figure><img alt="ด้านหลัง"><figcaption>ด้านหลัง</figcaption></figure><figure><img alt="ด้านข้าง"><figcaption>ด้านข้าง</figcaption></figure></div>
+    <table class="tells">${Object.entries(m.spec).map(([k2, v]) => `<tr><td>${TELLS[k2].label}</td><td>${esc(tellTxt(k2, v))}</td></tr>`).join('')}
       <tr><td>${TELLS.weight.label}</td><td>น้ำหนักองค์ครู <b>${mWeight(m)} กรัม</b> (ของแท้คลาดเคลื่อนไม่เกิน ±3%)</td></tr>
-      <tr><td>${TELLS.resin.label}</td><td>ของแท้ไม่เรืองแสงใต้ UV</td></tr></table></div>`;
-    }).join('');
+      <tr><td>${TELLS.resin.label}</td><td>ของแท้ไม่เรืองแสงใต้ UV</td></tr>
+      ${subs ? `<tr><td>พิมพ์ย่อย (ไม่ใช่ของเก๊)</td><td>${subs.map(x => `<b>${esc(x.name)}</b>: ${esc(x.txt)} • ราคา ×${x.mult}`).join('<br>')}</td></tr>` : ''}</table></div>`;
 }
 function invHTML() {
   if (!S.inv.length) return `<h2>ตู้พระ</h2><p>ตู้ยังว่างอยู่ รับเช่าพระจากลูกค้าหน้าร้านก่อนนะ</p>`;
   return `<h2>ตู้พระ (${S.inv.length} องค์)</h2><p class="note">แตะองค์พระเพื่อส่องดู ส่งตรวจ หรือปล่อยเช่า</p><div class="grid">` +
     S.inv.map(it => { const m = modelById(it.modelId);
       const st = it.pend ? '<span class="badge">รอผลตรวจ</span>' : it.cert === true ? '<span class="badge good">แท้</span>' : it.cert === false ? '<span class="badge bad">เก๊</span>' : '<span class="badge">ยังไม่ตรวจ</span>';
-      return `<button class="item" data-own="${it.id}"><img class="thumb" data-thumb="i:${it.id}" alt=""><span class="nm">${esc(m.name)}</span><span class="sub">สภาพ ${it.cond} • ${it.consign ? `ราคาเจ้าของ ${fmt(it.consign.price)}` : `ทุน ${fmt(it.paid)}`}</span><span class="tags">${st}${tagsOf(it)}${it.award ? '<span class="badge gold">รางวัล</span>' : ''}</span></button>`; }).join('') + '</div>';
+      return `<button class="item" data-own="${it.id}"><img class="thumb" data-thumb="i:${it.id}" alt=""><span class="nm">${esc(m.name)}</span><span class="sub">สภาพ ${it.cond} • ${it.consign ? `ราคาเจ้าของ ${fmt(it.consign.price)}` : `ทุน ${fmt(it.paid)}`}</span><span class="tags">${st}${rarBadge(modelById(it.modelId))}${tagsOf(it)}${it.award ? '<span class="badge gold">รางวัล</span>' : ''}</span></button>`; }).join('') + '</div>';
 }
 function contestHTML() {
   const L = lvl();
@@ -1570,6 +1181,8 @@ function menuHTML() {
 const HOW = `<h2>ยินดีต้อนรับสู่แผงพระของคุณ</h2>
 <ul class="log"><li>ลูกค้าจะนำพระมาเสนอให้เช่า ลากเพื่อหมุนองค์พระได้รอบ 360° ดูทั้งด้านหน้า ด้านหลัง และขอบข้าง</li>
 <li>กด <b>เทียบ</b> เพื่อดูคู่กับองค์ครู (ของแท้) หมุนพร้อมกัน ใช้ <b>เช็กลิสต์</b> ติ๊กทีละจุด และ <b>ถามอาจารย์</b> ได้วันละ 3 ครั้ง (ครั้งต่อไปมีค่าครู)</li>
+<li>พระมีหลายหมวด: พระเครื่อง เหรียญ พระกริ่ง และเครื่องรางอย่างตะกรุด เบี้ยแก้ บางชิ้นต้องกด <b>เขย่า</b> ฟังเสียง บางชิ้นใส่กรอบมา ต้อง <b>ถอดกรอบ</b> ก่อนดูขอบ</li>
+<li>ระวังลูกค้าอ้าง <b>พิมพ์นิยม</b> เกินจริง (ไม่ใช่ของเก๊ แต่ถ้าเชื่อจะจ่ายแพงเกิน) ดูตำหนิพิมพ์ย่อยในสมุด</li>
 <li>เปิด <b>สมุด</b> (แท็บล่าง) เทียบกับองค์ครู: ปางพระหัตถ์ พระเกศ จำนวนกลีบบัว ฐานชั้น ด้านหลัง ความหนา และผิวเนื้อ ของเก๊จะผิดอย่างน้อย 1 จุด</li>
 <li>กด <b>ส่อง</b> เพื่อซูมดูผิวใกล้ ๆ เหมือนใช้กล้องส่องพระ (ซูมแล้วลากสองนิ้ว หรือ Shift+ลาก เพื่อเลื่อนดู)</li>
 <li>ถ้ากด <b>ไม่เอา</b> ให้แตะจุดที่คิดว่าผิดบนองค์พระ (หรือเลือกจากรายการ) ถ้าองค์นั้นเก๊และชี้ถูก ได้ +20 XP ทันที</li>
@@ -1586,7 +1199,7 @@ const HOW = `<h2>ยินดีต้อนรับสู่แผงพระ
 /* ================= event wiring ================= */
 $('#act').addEventListener('click', e => {
   const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
-  ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, uv: toggleUV, cmp: toggleCmp, dyes: () => dailyAnswer(true), dno: () => dailyAnswer(false), dnext: dailyNext, dexit: toShop, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
+  ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, uv: toggleUV, cmp: toggleCmp, framesvc: () => openModal(frameSvcHTML()), dyes: () => dailyAnswer(true), dno: () => dailyAnswer(false), dnext: dailyNext, dexit: toShop, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
      back: toShop, cert: () => certify(ownItem), sell: () => sell(ownItem), scrap: () => scrap(ownItem) })[a]?.();
 });
 $('#tabs').addEventListener('click', e => {
@@ -1614,6 +1227,9 @@ $('#mbody').addEventListener('click', e => {
   const lv = e.target.closest('[data-live]'); if (lv) { liveAns(lv.dataset.live); return; }
   const skb = e.target.closest('[data-stock]'); if (skb) { const [bid, n] = skb.dataset.stock.split(':'); sellStock(bid, n); return; }
   if (e.target.id === 'recipeBtn') { openModal(recipeHTML()); return; }
+  const bc = e.target.closest('[data-bkcat]'); if (bc) { BK.cat = bc.dataset.bkcat; reModal(bookHTML()); return; }
+  const bo = e.target.closest('[data-bkopen]'); if (bo) { BK.open = BK.open === bo.dataset.bkopen ? null : bo.dataset.bkopen; reModal(bookHTML()); return; }
+  const fb = e.target.closest('[data-frame]'); if (fb) { if (!fb.disabled) doFrame(fb.dataset.frame); return; }
   if (e.target.id === 'bookBack') { openModal(bookHTML()); return; }
   if (e.target.id === 'howBtn') openModal(HOW);
   if (e.target.id === 'tutBtn') { restartTut(); return; }
@@ -1622,16 +1238,22 @@ $('#mbody').addEventListener('click', e => {
   if (e.target.id === 'resetYes') { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
 });
 $('#mbody').addEventListener('change', e => {
+  const bf = e.target.dataset.bkf; if (bf) { BK[bf] = e.target.value; const l = $('#bkList'); if (l) { l.innerHTML = bookList(); fillThumbs(l); } return; }
   const k = e.target.dataset.tf; if (k) { if (k === 'seq') setSeq(e.target.value); else TF[k] = k === 'qty' || k === 'keep' ? +e.target.value : e.target.value; if (k === 'seq' && !e.target.value) TF.seq = ''; reModal(templeHTML()); }
   const ig = e.target.dataset.ing; if (ig) { if (e.target.checked) { if (pickedIng().length >= maxIngr()) { toast(`เลือกมวลสารได้สูงสุด ${maxIngr()} อย่าง`, 'bad'); } else TF.ing[ig] = 'real'; } else { const { [ig]: _, ...rest } = TF.ing; TF.ing = rest; } reModal(templeHTML()); }
   const igf = e.target.dataset.ingf; if (igf) { TF.ing[igf] = e.target.checked ? 'fake' : 'real'; reModal(templeHTML()); }
   if (e.target.matches('.pick input')) { const on = $('#mbody').querySelectorAll('.pick input:checked'); if (on.length > 3) { e.target.checked = false; toast('ส่งได้สูงสุด 3 องค์', 'bad'); } }
 });
 $('#menuBtn').onclick = () => openModal(menuHTML());
-$('#mbody').addEventListener('input', e => { if (e.target.id === 'nick') onNick(e.target.value); });
+$('#mbody').addEventListener('input', e => {
+  if (e.target.id === 'nick') onNick(e.target.value);
+  if (e.target.id === 'bkq') { BK.q = e.target.value; const l = $('#bkList'); if (l) { l.innerHTML = bookList(); fillThumbs(l); } }
+});
 $('#chips').addEventListener('click', e => {
   if (e.target.closest('#clBtn')) { CL.open = !CL.open; renderChips(); }
   if (e.target.closest('#askBtn')) askTeacher();
+  if (e.target.closest('#shakeBtn')) shakePiece();
+  if (e.target.closest('#frameBtn')) toggleFrame();
   checkTut();
 });
 $('#clp').addEventListener('click', e => {
