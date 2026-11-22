@@ -81,7 +81,7 @@ function venueDone() { return `<h2>พลังเดินหมดแล้ว
 function oBuy() {
   if (!OC) return; const p = OC.p; if (S().money < p.price) return A.toast('เงินไม่พอ', 'bad');
   S().money -= p.price; A.addItem({ modelId: p.modelId, genuine: p.genuine, spec: p.spec, cond: p.cond, seed: p.seed }, p.price);
-  VEN.bought.push(OC.s + ':' + OC.j); A.toast(`ซื้อ ${A.modelById(p.modelId).name} ที่ ${fmt(p.price)} เก็บเข้าตู้แล้ว`, 'good'); A.save(); backToStall();
+  VEN.bought.push(OC.s + ':' + OC.j); if (p.gem) A.bump('gems'); A.toast(`ซื้อ ${A.modelById(p.modelId).name} ที่ ${fmt(p.price)} เก็บเข้าตู้แล้ว`, 'good'); A.save(); backToStall();
 }
 function oNego() {
   if (!OC) return; const p = OC.p, st = VEN.stalls[OC.s];
@@ -146,7 +146,7 @@ function tripEvent(k) {
   A.openModal(`<h2>ถึง${REGIONS[TRS.region]}แล้ว</h2><ul class="log">${TRS.log.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` + venueHTML().replace(/^<h2>[^<]*<\/h2>/, ''));
 }
 function tripBack() {
-  if (!TRS) return; const reg = TRS.region; TRS = null; VEN = null; OC = null;
+  if (!TRS) return; const reg = TRS.region; TRS = null; VEN = null; OC = null; A.bump('trips');
   S().away = 2; const lines = [...A.endDay({ silent: true }), ...A.endDay({ silent: true })]; S().away = 0;
   A.openModal(`<h2>กลับจากทริป${REGIONS[reg]}</h2><p class="note">ร้านปิด 2 วันระหว่างเดินทาง</p><ul class="log">${lines.map(([k, t]) => `<li class="${k}">${esc(t)}</li>`).join('')}</ul><div class="row"><button class="btn ok" data-close>เปิดร้าน</button></div>`);
   A.render();
@@ -210,7 +210,7 @@ function digShare(k) {
   const dt = opt === 'pious' ? 8 : opt === 'greedy' ? -15 : 2; s.trust[tid] = clamp((s.trust[tid] ?? 50) + dt, 0, 100);
   if (opt === 'pious') A.addMerit(5); if (opt === 'greedy') A.addKarma(5);
   for (const p of DG.pieces.slice(0, k)) A.addItem(p, 0);
-  A.gainXP(40); A.tlog(`ขุดกรุ${A.templeName(tid)}: ได้พระกรุ ${n} องค์ เก็บไว้ ${k} องค์ ความไว้ใจวัด ${dt > 0 ? '+' : ''}${dt}`, dt >= 0 ? 'good' : 'bad');
+  A.gainXP(40); A.bump('digs'); A.tlog(`ขุดกรุ${A.templeName(tid)}: ได้พระกรุ ${n} องค์ เก็บไว้ ${k} องค์ ความไว้ใจวัด ${dt > 0 ? '+' : ''}${dt}`, dt >= 0 ? 'good' : 'bad');
   s.dig = { invite: null, until: 0 }; DG = null; A.closeModal(); A.render();
 }
 
