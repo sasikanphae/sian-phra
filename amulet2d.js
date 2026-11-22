@@ -333,7 +333,7 @@ function makeFace(m, spec, cond, seed, res, side, D) {
     else if (mat.fx === 'wood') { const st = .5 + .5 * Math.sin(xx / W * 70 + low[i] * 9 + hi[i] * 1.5); col = col.map(c0 => c0 * (.74 + .3 * st)); }
     else if (mat.fx === 'glaze') col = col.map((c0, q) => lerp(c0, mat.hi[q], rid * .35));
     // งานผิว (finish) เป็นจุดสังเกต
-    const fin = spec.finish;
+    const fin = spec.finish || (spec.crust ? 'kru' : null); // crust = คราบกรุจากการขุดกรุ (ไม่ใช่จุดสังเกต)
     if (fin === 'lacquer') { const top = clamp((h[i] - .3) / .35, 0, 1); col = col.map((c0, q) => lerp(c0, [36, 22, 18][q], .82)); if (top > .15 && hi[i] > .4) col = col.map((c0, q) => lerp(c0, [218, 172, 70][q], .85 * top)); }
     else if (fin === 'gilt') { const wear = clamp(rid * 1.6 - .2 + (100 - cond) / 90, 0, 1); col = col.map((c0, q) => lerp(lerp(c0, [226, 184, 82][q], .8), c0, wear * .85)); }
     else if (fin === 'kru') { if (cav > .15 && low[i] > .42) col = col.map((c0, q) => lerp(c0, [228, 222, 206][q], .75 * cav)); if (hi[i] < .36 && cav > .08) col = col.map((c0, q) => lerp(c0, [118, 86, 56][q], .55)); }
