@@ -22,6 +22,7 @@
 9. **actions** — ต่อราคา, รับเช่า (เงินไม่พอ → `shortHTML`: ฝากขาย `it.consign`, เทิร์น `doTurn`, ลงหุ้น `it.share`, ยืม `S.loan`; ส่วนแบ่งตอนขาย `myCut`), ไม่เอา → โหมดชี้จุดเก๊ (`spot`, `commitSpot`, ชี้ได้ครั้งเดียวต่อองค์ผ่าน `c.pointed`), ส่งตรวจ, ปล่อยเช่า, `endDay()` (ผลตรวจ, เฉลยองค์ที่ปฏิเสธ, ยอดบูชารุ่นที่จัดสร้าง, ค่าแผง)
 9.5 **daily** — ส่องพระประจำวัน: `dailySet(date)` seed จาก `hash('daily:'+วันที่เวลาไทย)`, โหมด `daily` บน stage เดิม, จับเวลา, streak, คัดลอกผลแชร์
 9.7 **จัดสร้างพระ** (อยู่ในส่วน modals) — `TF` = สถานะหน้าออกแบบ 5 ขั้น (`wizHTML`, ตัวอย่าง 3D ผ่าน `PVA` + thumbnail renderer), `makeBatch`, หน้ารุ่น `batchCard` (หลอด hype/heat, `priceSVG`, `bAct` สายขาว/สายเทา, `LIVE` ไลฟ์สด), `dayBatch` (ตอน endDay), `sellStock`; ข้อมูล `INGR`, `RECIPES` (ลับ), `LUCKY` (ลับ), `EVENTS`, `PAGES`; batch มี `hype heat mp base hist keep stock coded seqOK`; `S.trust` / `S.templeBan` / `S.recipes` / `S.kaka` / `S.tlog` เติมค่าเซฟเก่าใน `normTemple()`
+10.5 **debug** — แผงทดสอบ (`DEBUG_ACTS`) แสดงเฉพาะเมื่อ URL มี `#debug` (เปิดเกมด้วย `index.html#debug`)
 10. **modals** — ร้านอุปกรณ์, สมุดองค์ครู, ตู้พระ, ประกวด (`runContest`), จัดสร้าง (`makeBatch`), เมนู, วิธีเล่น
 
 ## หลักการสำคัญ

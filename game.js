@@ -1486,5 +1486,30 @@ $('#spotbar').addEventListener('click', e => {
   if (e.target.id === 'spotList' && spotting() && !spot.busy) openModal(spotListHTML());
 });
 
+/* ================= debug (#debug เท่านั้น) ================= */
+// แผงทดสอบ: แสดงเฉพาะเมื่อ URL มี #debug ไม่สร้าง element เลยถ้าไม่มี
+const DEBUG_ACTS = {
+  money: ['+฿1,000,000', () => { S.money += 1e6; }],
+  xp: ['+1,000 XP', () => { gainXP(1000); }],
+  rep: ['+20 ชื่อเสียง', () => { S.rep = Math.min(100, S.rep + 20); }],
+  day: ['ข้ามวัน', () => { closeModal(); endDay(); }],
+  daily: ['รีเซ็ตส่องพระประจำวัน', () => { D = {}; saveD(); DS = null; if (mode === 'daily') { mode = 'shop'; lastShown = null; } toast('รีเซ็ตส่องพระประจำวันแล้ว'); }],
+};
+function syncDebug() {
+  const on = /(^|[#&])debug\b/.test(location.hash.slice(1)) || location.hash === '#debug';
+  let el = $('#dbg');
+  if (!on) { if (el) el.remove(); return; }
+  if (el) return;
+  el = document.createElement('div'); el.id = 'dbg'; el.className = 'dbg';
+  el.innerHTML = `<button class="dbt" data-dbg="toggle" aria-expanded="false">DEBUG</button><div class="dbb" hidden>${Object.entries(DEBUG_ACTS).map(([k, [n]]) => `<button data-dbg="${k}">${n}</button>`).join('')}</div>`;
+  el.addEventListener('click', e => {
+    const k = e.target.closest('[data-dbg]')?.dataset.dbg; if (!k) return;
+    if (k === 'toggle') { const b = el.querySelector('.dbb'); b.hidden = !b.hidden; e.target.setAttribute('aria-expanded', String(!b.hidden)); return; }
+    DEBUG_ACTS[k][1](); save(); render();
+  });
+  document.body.appendChild(el);
+}
+addEventListener('hashchange', syncDebug); syncDebug();
+
 resize(); render(); frame();
 if (!S.seen) { S.seen = true; save(); openModal(HOW); }

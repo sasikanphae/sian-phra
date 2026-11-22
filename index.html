@@ -134,6 +134,9 @@ button,select,input{font:inherit;color:inherit}
 .cmt{display:flex;flex-direction:column;gap:2px;background:#ffffff12;border-radius:14px;padding:10px 14px;margin:10px 0;font-size:18px}
 .cmt b{font:600 14px Kanit,sans-serif;color:#9fd0ff}
 .fb{color:#8ff0a8;margin:6px 0}
+.dbg{position:fixed;z-index:40;right:6px;bottom:calc(60px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:4px;font:600 12px Kanit,sans-serif}
+.dbg button{min-height:36px;padding:4px 10px;border-radius:8px;border:1px solid #7cf;background:#0a2a3aee;color:#bdf;cursor:pointer}
+.dbg .dbb{display:flex;flex-direction:column;gap:4px}.dbg .dbb[hidden]{display:none}
 .span2{grid-column:span 2}.span3{grid-column:1/-1}
 .tabs{grid-area:tabs;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#0f0604;border-top:1px solid var(--line)}
 .tab{min-height:52px;border:0;background:none;cursor:pointer;font:600 14px Kanit,sans-serif;color:var(--mute);padding:4px 2px;position:relative}
