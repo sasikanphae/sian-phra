@@ -1,6 +1,7 @@
 import * as THREE from './three.module.min.js';
 import { $, clamp, lerp, rng, hash, fmt, pick, esc, round100, wpick, inPoly, mk } from './util.js';
 import { SUBP, subsOf, subOf, RAR, REGIONS, CATS, isCoin, catOf, FRAMES, MATS, THW, TELLS, tellTxt, MODELS, LEVELS, UNLOCK, TEMPLES, PIMS, DW, mWeight, TOOLS, INGR, RECIPES, EVENTS, PAGES, LIVE_T, LIVE_Q, VIEWERS, LUCKY, NAME_A, NAME_B, ingrList, ingrKey, ingrTxt, mutIngr, UNIT, NAMES, HONEST, SLICK } from './data.js';
+import { initOuting, normOuting, weekend, hubHTML, oPiece, oKey, oCard, oActs, oAct, oLeave, oClick, awayLine, digDay, outingBadge } from './outing.js';
 import { initKarma, normKarma, addMerit, addKarma, goodMult, mkHTML, attachCert, checkCert, victimCustomer, victimActs, startReceive, rumorHTML, donateHTML, dressPiece, sellChoice, sellHTML, confirmGrey, BRIBE_COST, bribeOutcome, attackRival, karmaDay, queueEnding, popEnding, endingBookHTML, titles, endingsLine, kPiece, kKey, kCard, kActs, kAct, kClick } from './karma.js';
 import { initEndgame, normEndgame, stars, starTitle, starTxt, starMult, starPatience, starProgress, LEGENDS, legendById, legendsOpen, legendsOwned, addClue, onCustomerDone, markOwned, legendCustomer, RIVALS, duelOn, aucOn, aucToday, modePiece, modeKey, modeCard, modeActs, modeQinfo, modeAct, leaveMode, egTick, onSpotHit, endgameDay, goalsHTML, egClick, museumScore } from './endgame.js';
 import { poseFig, TW, TH, g, qb, OUT, outlinePts, inset, pathPts, dome, limb, slab, glyph, unalom, FIG, drawPidta, drawFigure, drawFront, drawBack, drawCode, boxBlur, noise, chan, makeFace } from './amulet2d.js';
@@ -169,7 +170,7 @@ let tutTick = 0;
 
 /* ================= thumbnails (second renderer) ================= */
 let TR = null, TS = null, TC = null; const THUMB = new Map(), jobs = [];
-function snap(key, m, spec, cond, seed, views) {
+function snap(key, m, spec, cond, seed, views, res = .5) {
   if (THUMB.has(key)) return THUMB.get(key);
   if (!TR) { TR = makeRenderer({ canvas: mk(240, 300), antialias: true, preserveDrawingBuffer: true }); TR.setSize(240, 300, false); TR.setClearColor(0x2a130e, 1); TS = setupScene(TR); TC = new THREE.PerspectiveCamera(30, .8, .05, 50); }
   const grp = buildAmulet(m, spec, cond, seed, .5); TS.add(grp);
@@ -183,7 +184,7 @@ const PVA = new Map();
 function fillThumbs(root) {
   root.querySelectorAll('[data-thumb]').forEach(el => {
     const [kind, id] = el.dataset.thumb.split(':');
-    if (kind === 'x') { const a = XA.get(id); if (a) thumbLater('x:' + id, [...a, ['front']], urls => { el.src = urls[0]; }); return; }
+    if (kind === 'x') { const a = XA.get(id); if (a) thumbLater('x:' + id, [a[0], a[1], a[2], a[3], ['front'], a[4] || .5], urls => { el.src = urls[0]; }); return; }
     if (kind === 'pv') { const a = PVA.get(id); if (a) thumbLater('pv:' + id, [a[0], a[1], 100, 4242, ['front', 'back']], urls => { el.querySelectorAll('img').forEach((im, i) => im.src = urls[i]); }); return; }
     if (kind === 'm') { const m = modelById(id); thumbLater('m:' + id, [m, m.spec, 100, 4242, ['front', 'back', 'side']], urls => { el.querySelectorAll('img').forEach((im, i) => im.src = urls[i]); }); }
     else { const it = S.inv.find(i => String(i.id) === id); if (it) thumbLater('i:' + id, [modelById(it.modelId), it.spec, it.cond, it.seed, ['front']], urls => { el.src = urls[0]; }); }
@@ -251,7 +252,7 @@ function normTemple() {
     b.base ??= cm ? cm.price : b.unit * 12; b.mp ??= b.base; b.hist ??= b.open ? [Math.round(b.mp)] : [];
   }
 }
-normTemple(); normEndgame(S); normKarma(S);
+normTemple(); normEndgame(S); normKarma(S); normOuting(S);
 // เชื่อมโมดูลเป้าหมายหลัง Lv.6 (endgame.js ไม่ import จาก game.js จึงส่งฟังก์ชันผ่าน api แบบเรียกทีหลัง)
 initEndgame({
   S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(), reModal: h => reModal(h),
@@ -262,6 +263,16 @@ initEndgame({
   queueEnding: id => queueEnding(id), endingsLine: () => endingsLine(), attackRival: (id, n) => attackRival(id, n),
 });
 // เชื่อมโมดูลบุญกรรม/สายเทา/ฉากจบ (karma.js)
+// เชื่อมโมดูลกิจกรรมนอกร้าน (outing.js)
+initOuting({
+  S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(),
+  lvl: () => lvl(), gainXP: n => gainXP(n), mutate: (...a) => mutate(...a), cf: c => cf(c), modelById: id => modelById(id), rarBadge: m => rarBadge(m),
+  setMode: m => { mode = m; ownItem = null; spot = null; lastShown = null; closeModal(); render(); }, addItem: (p, paid) => { takeItem({ ...p, id: S.nextId++, ask: paid }); },
+  thumbKey: (m, spec, cond, seed, res) => { const k = String(hash(JSON.stringify([m.id, spec, cond, seed, res]))); XA.set(k, [m, spec, cond, seed, res]); return k; },
+  thumbImg: (m, spec, cond, seed, cb) => thumbLater('dig:' + hash(JSON.stringify([m.id, spec, seed])), [m, spec, cond, seed, ['front'], .5], u => cb(u[0])),
+  addMerit: n => addMerit(n), addKarma: n => addKarma(n), goodMult: () => goodMult(), tlog: (m, k) => tlog(m, k), endDay: o => endDay(o),
+  templeName: id => (TEMPLES.find(t => t.id === id) || { name: 'วัด' }).name,
+});
 initKarma({
   S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(), reModal: h => reModal(h),
   lvl: () => lvl(), gainXP: n => gainXP(n), modelById: id => modelById(id), mutate: (...a) => mutate(...a), curPiece: () => curPiece(), ownItem: () => ownItem,
@@ -369,6 +380,7 @@ function loadStage() {
   let key = null, args = null;
   if (mode === 'own' && ownItem) { key = 'i' + ownItem.id; args = [modelById(ownItem.modelId), ownItem.spec, ownItem.cond, ownItem.seed]; }
   else if (mode === 'daily') { const it = DS[D.run.idx]; key = 'd' + D.run.date + ':' + D.run.idx; args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
+  else if (oPiece(mode)) { const it = oPiece(mode); key = oKey(mode); args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (kPiece(mode)) { const it = kPiece(mode); key = kKey(mode); args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (modePiece(mode)) { const it = modePiece(mode); key = modeKey(mode); args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (mode === 'shop' && S.queue[0]) { const c = S.queue[0]; key = 'c' + c.id; args = [modelById(c.modelId), c.spec, c.cond, c.seed]; }
@@ -393,6 +405,7 @@ function render() {
   if (mode === 'daily') q.innerHTML = `<span class="badge gold" id="dtimer">⏱ ${fmtTime(dElapsed())}</span>`;
   if (mode === 'duel' || mode === 'auction') q.innerHTML = modeQinfo(mode);
   if (mode === 'shop' && S.queue.length) q.innerHTML = `<span class="badge">ลูกค้ารอ ${S.queue.length} คน</span>` + (L >= 3 && S.day % 3 === 0 && S.contestDay !== S.day ? `<span class="badge gold">วันนี้มีงานประกวดพระ</span>` : '');
+  if (mode === 'shop' && outingBadge()) q.innerHTML += `<button class="badge good qbtn" data-o="hub">${outingBadge()} แตะเพื่อไป</button>`;
   if (mode === 'shop' && S.rumor.on) q.innerHTML += '<button class="badge bad qbtn" id="rumorBtn">มีข่าวลือว่าร้านขายของเก๊! แตะเพื่อแก้ข่าว</button>';
   if (mode === 'shop' && aucToday()) q.innerHTML += '<button class="badge gold qbtn" data-eg="auction">วันนี้มีงานประมูล แตะเพื่อเข้างาน</button>';
   let em = stage.querySelector('.empty'); if (em) em.remove();
@@ -410,6 +423,7 @@ function renderCard() {
   const el = $('#card');
   if (mode === 'duel' || mode === 'auction') { el.innerHTML = modeCard(mode); return; }
   if (mode === 'recv') { el.innerHTML = kCard(mode); return; }
+  if (mode === 'outing') { el.innerHTML = oCard(mode); return; }
   if (mode === 'daily') {
     const R0 = D.run, it = DS[R0.idx], m = modelById(it.modelId), ok = R0.ans[R0.idx];
     const marks = R0.ans.map(a => a ? '🟩' : '🟥').join('') + '⬜'.repeat(5 - R0.ans.length);
@@ -453,6 +467,8 @@ function renderActs() {
     el.innerHTML = rows(toolBtns(), row2);
   } else if (mode === 'duel' || mode === 'auction') {
     el.innerHTML = rows(toolBtns(), modeActs(mode));
+  } else if (mode === 'outing') {
+    el.innerHTML = rows(toolBtns(), oActs(mode));
   } else if (mode === 'recv') {
     el.innerHTML = rows(toolBtns(), kActs(mode));
   } else if (mode === 'shop' && S.queue[0] && S.queue[0].victim && !spotting()) {
@@ -610,7 +626,7 @@ function renderSpotBar() {
 }
 const certFee = it => round100(Math.max(500, modelById(it.modelId).price * .03));
 const scrapVal = it => round100(modelById(it.modelId).price * .02);
-function offerFor(it) { const m = modelById(it.modelId), r = rng(hash(it.id + ':' + S.day)); return (it.frame ? FRAMES[it.frame].val : 0) + round100(starMult() * m.price * subMult(it) * cf(it.cond) * (it.cert ? 1.15 : 1) * (1 + .1 * it.award) * (1 + S.rep / 300) * (.9 + r() * .18)); }
+function offerFor(it) { const m = modelById(it.modelId), r = rng(hash(it.id + ':' + S.day)); return (it.frame ? FRAMES[it.frame].val : 0) + round100(starMult() * (it.spec && it.spec.crust ? 1.25 : 1) * m.price * subMult(it) * cf(it.cond) * (it.cert ? 1.15 : 1) * (1 + .1 * it.award) * (1 + S.rep / 300) * (.9 + r() * .18)); }
 function revealXP(it) { const m = modelById(it.modelId); it.xp = true; return 15 + clamp(Math.round((m.price * cf(it.cond) - (it.ask ?? it.paid)) / (m.price * .05)), 0, 20) * 2; }
 // ส่วนที่เป็นของผู้เล่นเมื่อขายได้ p: ฝากขาย = ส่วนเกินราคาเจ้าของ (ขั้นต่ำ 10%), หุ้น = ครึ่งหนึ่ง
 function myCut(it, p) { return it.consign ? Math.max(p - it.consign.price, round100(p * .1)) : it.share ? Math.round(p / 2) : p; }
@@ -635,11 +651,12 @@ function scrap(it) {
   if (it.consign) { toast(`คืนพระให้${it.consign.owner}แล้ว`); toShop(); return; }
   const v = it.share ? Math.round(scrapVal(it) / 2) : scrapVal(it); S.money += v; toast(`ขายเป็นของที่ระลึก ได้ ${fmt(v)}${it.share ? ' (แบ่งเพื่อนครึ่งหนึ่ง)' : ''}`); toShop();
 }
-function toShop() { pauseDaily(); leaveMode(mode); mode = 'shop'; ownItem = null; render(); }
-function openOwn(it) { pauseDaily(); leaveMode(mode); mode = 'own'; ownItem = it; closeModal(); render(); }
+function toShop() { pauseDaily(); leaveMode(mode); oLeave(mode); mode = 'shop'; ownItem = null; render(); }
+function openOwn(it) { pauseDaily(); leaveMode(mode); oLeave(mode); mode = 'own'; ownItem = it; closeModal(); render(); }
 
-function endDay() {
+function endDay(opts = {}) {
   const lines = [], L0 = lvl(), shows = [];
+  if (S.away) { S.queue = []; lines.push(awayLine()); } // ร้านปิดระหว่างทริป
   for (const it of S.inv) if (it.pend) {
     it.pend = 0; it.cert = it.genuine; const m = modelById(it.modelId);
     if (it.genuine) { const x = it.xp ? 0 : revealXP(it), sb = subOf(m, it.spec.sub), cl = subOf(m, it.claim); gainXP(x); lines.push(['good', `ผลตรวจ ${m.name}: แท้ ได้ใบรับรอง${sb ? ` เป็น${sb.name}${cl && cl.id !== sb.id ? ` (ไม่ใช่${cl.name}ตามที่ผู้ขายบอก)` : ''}` : ''}${x ? ` (+${x} XP)` : ''}`]); }
@@ -666,7 +683,7 @@ function endDay() {
   for (const it of S.inv.filter(x => x.consign && S.day >= x.consign.until)) {
     S.inv = S.inv.filter(x => x !== it); lines.push(['', `${it.consign.owner}มารับ ${modelById(it.modelId).name} คืน (ฝากขายครบ 5 วันแล้วยังขายไม่ออก)`]);
   }
-  endgameDay(lines); karmaDay(lines);
+  endgameDay(lines); karmaDay(lines); digDay(lines);
   const rent = 200 + 300 * L0; S.money -= rent; lines.push(['', `ค่าเช่าแผงพระ ${fmt(-rent)}`]);
   if (S.loan.amt > 0) {
     const fee = Math.round(S.loan.amt * .03); S.loan.amt += fee;
@@ -681,6 +698,7 @@ function endDay() {
     } else lines.push(['bad', `ดอกเบี้ยเฮีย 3% ${fmt(-fee)} • หนี้คงเหลือ ${fmt(S.loan.amt)} • เหลือ ${S.loan.day + 10 - S.day} วันก่อนโดนยึด`]);
   }
   S.day++; genQueue(); mode = 'shop'; ownItem = null;
+  if (opts && opts.silent) { save(); return lines.map(([k, t]) => [k, `วันที่ ${S.day - 1}: ${t}`]); }
   const lv = levelHTML();
   openModal(`<h2>สรุปวันที่ ${S.day - 1}</h2><ul class="log">${lines.map(([k, t]) => `<li class="${k}">${esc(t)}</li>`).join('')}</ul>${lv}
     ${shows.length ? `<h3>เฉลยพร้อมภาพ</h3>${shows.slice(0, 4).map(revealCard).join('')}${shows.length > 4 ? `<p class="note">และอีก ${shows.length - 4} องค์</p>` : ''}` : ''}
@@ -742,6 +760,7 @@ function curPiece() {
   if (mode === 'daily' && DS && D.run) return DS[D.run.idx];
   if (modePiece(mode)) return modePiece(mode);
   if (kPiece(mode)) return kPiece(mode);
+  if (oPiece(mode)) return oPiece(mode);
   return mode === 'shop' ? S.queue[0] || null : null;
 }
 // เช็กลิสต์: ผู้เล่นติ๊กเอง เกมไม่ช่วยตอบ ล้างเมื่อเปลี่ยนองค์ (ใน loadStage)
@@ -1229,9 +1248,9 @@ function buyTool(id) {
   S.money -= t.price; S.tools[id] = true; sfx('buy'); toast(`ได้ ${t.name} มาแล้ว`, 'good'); openModal(toolShopHTML()); render();
 }
 // เริ่มเกมใหม่ (ฉากจบ/ฉายาเก็บไว้ใน META ของ karma.js จึงไม่หาย)
-function restartGame() { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); normEndgame(S); normKarma(S); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
+function restartGame() { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); normEndgame(S); normKarma(S); normOuting(S); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
 function menuHTML() {
-  return `<h2>เมนู</h2>${dailyBtnHTML()}<button class="btn dailyb goalb" data-eg="goals">เป้าหมาย<small>${lvl() >= 6 ? `${starTxt(stars()) || '★0'} • ตำนาน ${legendsOwned()}/5` : 'ดวล ประมูล ตำนาน สาขา พิพิธภัณฑ์ สมาคม'}${aucToday() ? ' • วันนี้มีงานประมูล!' : ''}</small></button><div class="row"><button class="btn" id="donateBtn">ทำบุญ ถวายวัด<small>บุญ ${S.merit} • กรรม ${S.karma}</small></button><button class="btn" id="endBookBtn">สมุดฉากจบ</button>${S.rumor.on ? '<button class="btn no" id="rumorBtn">แก้ข่าวลือ</button>' : ''}</div>${titles().length ? `<p class="note">ฉายาที่ปลดล็อก: ${esc(titles().join(', '))}</p>` : ''}<h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
+  return `<h2>เมนู</h2>${dailyBtnHTML()}<button class="btn dailyb goalb" data-eg="goals">เป้าหมาย<small>${lvl() >= 6 ? `${starTxt(stars()) || '★0'} • ตำนาน ${legendsOwned()}/5` : 'ดวล ประมูล ตำนาน สาขา พิพิธภัณฑ์ สมาคม'}${aucToday() ? ' • วันนี้มีงานประมูล!' : ''}</small></button><div class="row"><button class="btn" id="donateBtn">ทำบุญ ถวายวัด<small>บุญ ${S.merit} • กรรม ${S.karma}</small></button><button class="btn" id="endBookBtn">สมุดฉากจบ</button><button class="btn" data-o="hub">นอกร้าน<small>${esc(outingBadge() || 'สนามพระ ทริป ขุดกรุ')}</small></button>${S.rumor.on ? '<button class="btn no" id="rumorBtn">แก้ข่าวลือ</button>' : ''}</div>${titles().length ? `<p class="note">ฉายาที่ปลดล็อก: ${esc(titles().join(', '))}</p>` : ''}<h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
   ${S.loan.amt ? `<h3>หนี้เฮียโรงรับจำนำ</h3><p>คงเหลือ <b class="debtc">${fmt(S.loan.amt)}</b> • ดอกเบี้ย 3% ต่อวัน • ${loanLeftDays() > 0 ? `อีก ${loanLeftDays()} วันจะโดนยึดพระ` : 'ครบกำหนดแล้ว ปิดร้านวันนี้จะโดนยึดพระ'}</p>
   <div class="row"><button class="btn ok" id="repayBtn" ${S.money <= 0 ? 'disabled' : ''}>คืนเงิน ${fmt(Math.max(0, Math.min(S.money, S.loan.amt)))}${S.money < S.loan.amt ? '<small>(คืนได้เท่าที่มี)</small>' : ''}</button></div>` : ''}
   <div class="row"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn" id="tutBtn">ดูบทเรียนอีกครั้ง</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
@@ -1250,6 +1269,7 @@ const HOW = `<h2>ยินดีต้อนรับสู่แผงพระ
 <li><b>ส่องพระประจำวัน</b> (ในเมนู ≡): 5 องค์ชุดเดียวกันทุกคน ตอบแค่แท้/เก๊ จับเวลา แล้วคัดลอกผลไปแชร์ เล่นได้วันละครั้ง</li>
 <li>ตั้งแต่ Lv.4 มี <b>ดวลส่องพระ</b> กับเซียนคู่แข่งวันละครั้ง และ <b>งานประมูล</b> ทุก 5 วัน • ถึง Lv.6 XP ที่เกินจะกลายเป็น <b>ดาวบารมี</b> และเปิดการตามล่าพระในตำนาน สาขา พิพิธภัณฑ์ และสมาคม ดูความคืบหน้าทั้งหมดใน <b>เมนู ≡ → เป้าหมาย</b></li>
 <li><b>บุญ</b> และ <b>กรรม</b> (มุมบนจอ): ทำบุญ ช่วยลูกค้าที่โดนหลอก และบอกผู้ซื้อตามจริงเพิ่มบุญ ส่วนทางเลือก <b>สายเทา</b> (แต่งผิวแล้วไม่บอก ติดสินบนกรรมการ จ้างหน้าม้า ปล่อยข่าวโจมตี) ได้เร็วแต่เพิ่มกรรม เสี่ยงโดนแฉและโดนหน่วยปราบพระปลอมเข้าตรวจ • ระวังใบรับรองปลอม และตรวจรับของทุกครั้งก่อนจ่ายเงิน</li>
+<li><b>นอกร้าน</b> (เมนู ≡): วันหยุดไป <b>เดินสนามพระ</b> หาของหลุดจากแผงต่าง ๆ, ไป <b>ทริปต่างจังหวัด</b> ซื้อพระของภาคนั้นราคาต้นทาง และถ้าวัดไว้ใจมากอาจได้รับเชิญไป <b>ขุดกรุ</b></li>
 <li>เกมมีหลายฉากจบ ดูที่ปลดล็อกแล้วใน <b>สมุดฉากจบ</b> (เมนู ≡)</li>
 <li>สะสม XP ไต่ระดับ: Lv.3 ปลดล็อกงานประกวดพระ, Lv.5 ปลดล็อกการจัดสร้างพระกับวัด</li>
 <li><b>จัดสร้างพระ</b> (Lv.5): เลือกวัดและพิมพ์ ใส่มวลสาร ตั้งชื่อรุ่นเอง และเก็บสต็อกไว้ขายเองได้ ลองผสมมวลสารหลาย ๆ แบบ อาจเจอตำรับลับ • มวลสารเทียมถูกแต่เสี่ยง</li>
@@ -1262,6 +1282,7 @@ $('#act').addEventListener('click', e => {
   const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
   if (a.startsWith('eg:')) { modeAct(a.slice(3)); return; }
   if (a.startsWith('k:')) { kAct(a.slice(2)); return; }
+  if (a.startsWith('o:')) { oAct(a.slice(2)); return; }
   ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, uv: toggleUV, cmp: toggleCmp, framesvc: () => openModal(frameSvcHTML()), dyes: () => dailyAnswer(true), dno: () => dailyAnswer(false), dnext: dailyNext, dexit: toShop, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
      back: toShop, cert: () => certify(ownItem), sell: () => sell(ownItem), scrap: () => scrap(ownItem) })[a]?.();
 });
@@ -1330,6 +1351,7 @@ $('#clp').addEventListener('click', e => {
 document.addEventListener('click', e => { const eg = e.target.closest('[data-eg]'); if (eg && !eg.disabled) { egClick(eg); return; } });
 document.addEventListener('click', e => {
   const kb = e.target.closest('[data-k]'); if (kb && !kb.disabled) { kClick(kb); return; }
+  const ob = e.target.closest('[data-o]'); if (ob && !ob.disabled && !ob.matches('path:not([data-o])')) { oClick(ob); return; }
   if (e.target.closest('#rumorBtn')) openModal(rumorHTML());
   if (e.target.closest('#donateBtn')) openModal(donateHTML());
   if (e.target.closest('#endBookBtn')) openModal(endingBookHTML());
@@ -1347,6 +1369,8 @@ const DEBUG_ACTS = {
   xp: ['+1,000 XP', () => { gainXP(1000); }],
   rep: ['+20 ชื่อเสียง', () => { S.rep = Math.min(100, S.rep + 20); }],
   day: ['ข้ามวัน', () => { closeModal(); endDay(); }],
+  weekend: ['ข้ามไปวันหยุด (สนามพระ)', () => { while (!weekend()) S.day++; genQueue(); }],
+  dig: ['เชิญไปขุดกรุ', () => { S.dig = { invite: Object.keys(S.trust || { pa: 1 })[0] || 'pa', until: S.day + 4 }; }],
   merit: ['+50 บุญ', () => { addMerit(50); }],
   karma: ['+50 กรรม', () => { addKarma(50); }],
   star: ['+5,000 XP', () => { gainXP(5000); }],
