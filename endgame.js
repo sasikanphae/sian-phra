@@ -253,7 +253,8 @@ function branchHTML() {
 }
 function openBranch(k) {
   const T = BRANCH_T[k]; if (!T || A.lvl() < 6 || S().branches.length >= 3 || S().branches.some(b => b.t === k) || S().money < T.open) return;
-  S().money -= T.open; S().branches.push({ t: k, app: pick(Math.random, APPS), skill: 30 + Math.floor(Math.random() * 31), last: null });
+  const ph = A.phumApp ? A.phumApp() : null; // น้องภูมิ (จากเรื่องราวลูกค้าประจำ) มาประจำสาขาแรก
+  S().money -= T.open; S().branches.push({ t: k, app: ph ? ph.name : pick(Math.random, APPS), skill: Math.min(90, 30 + Math.floor(Math.random() * 31) + (ph ? ph.bonus : 0)), last: null });
   A.toast(`เปิด${T.name}แล้ว`, 'good'); A.reModal(branchHTML()); A.render();
 }
 function train(i) { const b = S().branches[+i]; if (!b || b.skill >= 90 || S().money < trainCost(b)) return; S().money -= trainCost(b); b.skill = Math.min(90, b.skill + 5); A.reModal(branchHTML()); A.render(); }
