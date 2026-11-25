@@ -20,7 +20,8 @@ const VENDORS = [
   { name: 'แผงพี่ของถูกมีทุกรุ่น', type: 'junk', note: 'มีครบทุกรุ่นในสมุด ราคาถูกเหลือเชื่อ', col: '#a04000' },
   { name: 'แผงยายขายของเก่า', type: 'auntie', note: 'ขายถ้วยชาม ของเก่า มีพระปนมาในตะกร้า', col: '#7d6608' },
 ];
-const weekend = () => S().day % 7 === 6 || S().day % 7 === 0;
+// วันหยุด หรือวันงานวัดประจำปีของวัดในอุปถัมภ์ (เฟส 9) สนามพระเปิด
+const weekend = () => S().day % 7 === 6 || S().day % 7 === 0 || !!(A && A.fairToday && A.fairToday());
 const nextWeekend = () => { let d = S().day + 1; while (!(d % 7 === 6 || d % 7 === 0)) d++; return d; };
 // ราคาตลาดถ้าแท้ (รวมพิมพ์ย่อยจริง)
 const worth = p => { const m = A.modelById(p.modelId), sb = (subsOf(m) || []).find(x => x.id === p.spec.sub); return m.price * A.cf(p.cond) * (sb ? sb.mult : 1); };
