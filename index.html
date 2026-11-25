@@ -348,6 +348,17 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .vols{display:flex;flex-direction:column;gap:6px}
 .vols label{display:flex;align-items:center;gap:10px;font:500 14px Kanit,sans-serif;min-height:44px}
 .vols input{flex:1;accent-color:#e6c46a;min-height:32px}
+/* เฟส 9: วัดในอุปถัมภ์ */
+.stage.pix #c{image-rendering:pixelated;image-rendering:crisp-edges}
+.stage.wat .shopsign,.stage.wat .cat,.stage.wat #chips,.stage.wat #loupe{display:none}
+.watbub{position:absolute;z-index:6;transform:translateX(-50%);max-width:220px;background:#fff8ea;color:#2a1a10;border-radius:12px;padding:6px 10px;font:500 14px Sarabun,sans-serif;box-shadow:0 2px 8px #0006;pointer-events:none}
+.watbub::after{content:"";position:absolute;left:50%;bottom:-7px;margin-left:-7px;border:7px solid transparent;border-bottom:0;border-top-color:#fff8ea}
+.abbot{background:#e6c46a1a;border-left:3px solid #e6c46a;padding:8px 10px;border-radius:8px;margin:8px 0}
+.req{list-style:none;padding:0;margin:6px 0}.req li{padding:3px 0;opacity:.8}.req li.ok{color:#5fd98a;opacity:1}
+.wbs{display:flex;flex-direction:column}
+.wbrow{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #ffffff14}
+.wbrow>span{flex:1;min-width:0}.wbrow small{display:block;font-size:12px;opacity:.75}
+.wbrow.done b{color:#5fd98a}.wbrow .btn{flex:none;min-width:110px}
 </style>
 </head>
 <body>

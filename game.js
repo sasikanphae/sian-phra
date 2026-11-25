@@ -1,6 +1,7 @@
 import * as THREE from './three.module.min.js';
 import { $, clamp, lerp, rng, hash, fmt, pick, esc, round100, wpick, inPoly, mk } from './util.js';
 import { SUBP, subsOf, subOf, RAR, REGIONS, CATS, isCoin, catOf, FRAMES, MATS, THW, TELLS, tellTxt, MODELS, LEVELS, UNLOCK, TEMPLES, PIMS, DW, mWeight, TOOLS, INGR, RECIPES, EVENTS, PAGES, LIVE_T, LIVE_Q, VIEWERS, LUCKY, NAME_A, NAME_B, ingrList, ingrKey, ingrTxt, mutIngr, UNIT, NAMES, HONEST, SLICK } from './data.js';
+import { initWat, normWat, openWat, watUnlocked, watFrameHook, watLeave, watCard, watActs, watAct, watTap, watPan, watZoom, tClick, watDay, watShare, watBatchMods, watGrey, watScandal, watCustomers, fairToday } from './wat.js';
 import { initWorld, normWorld, festCustomers, mktMult, marketDay, worldHTML, wClick, worldBadge, setVol, musicOn, tPiece, tKey, tCard, tActs, tAct, tLeave, tQinfo, tTick } from './world.js';
 import { initLife, normLife, lifeDay, extraCustomers, catPatience, applyDecor, renderCat, lClick, hubHTML as lifeHubHTML, lifeBadge } from './shoplife.js';
 import { initStory, normStory, bump, ordersDay, ordersCount, storyDay, lostCustomers, onAcquire, storyBadge, phumBonus, checkAch, sClick } from './story.js';
@@ -31,6 +32,7 @@ canvas.addEventListener('pointerdown', e => {
 canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId); if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
   if (tap0) tap0.max = Math.max(tap0.max, Math.hypot(e.clientX - tap0.x, e.clientY - tap0.y));
+  if (mode === 'wat') { if (ptrs.size === 1) watPan(dx, dy, stage.clientHeight); else if (ptrs.size === 2 && pinch0) { const s = pinchState(); watZoom(s.d / pinch0.d); pinch0 = s; } return; }
   if (ptrs.size === 1) { if (V.pan) panBy(dx, dy); else { const k = .009 * Math.max(.45, V.zoom); rotBy(dx * k, dy * k); V.vx = dx * k; V.vy = dy * k; } }
   else if (ptrs.size === 2 && pinch0) { const s = pinchState(); V.zt = clamp(V.zt * pinch0.d / s.d, zMin(), 1.6); panBy(s.x - pinch0.x, s.y - pinch0.y); pinch0 = s; }
 });
@@ -38,7 +40,7 @@ const ptrUp = e => {
   if (e.type === 'pointerup' && tap0 && !tap0.multi && ptrs.size === 1 && ptrs.has(e.pointerId) && tap0.max < 6) onTap(e.clientX, e.clientY);
   ptrs.delete(e.pointerId); if (!ptrs.size) tap0 = null; if (ptrs.size < 2) pinch0 = null; if (!ptrs.size) V.drag = false; };
 canvas.addEventListener('pointerup', ptrUp); canvas.addEventListener('pointercancel', ptrUp);
-canvas.addEventListener('wheel', e => { e.preventDefault(); V.zt = clamp(V.zt * Math.exp(e.deltaY * .0012), zMin(), 1.6); }, { passive: false });
+canvas.addEventListener('wheel', e => { e.preventDefault(); if (mode === 'wat') { watZoom(Math.exp(-e.deltaY * .0012)); return; } V.zt = clamp(V.zt * Math.exp(e.deltaY * .0012), zMin(), 1.6); }, { passive: false });
 canvas.addEventListener('dblclick', () => resetView());
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 function resetView() { V.reset = new THREE.Quaternion(); V.zt = 1; V.vx = V.vy = 0; }
@@ -151,6 +153,8 @@ function tickHL() {
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function frame() {
   requestAnimationFrame(frame);
+  if (mode === 'wat') { watFrameHook(R, stage.clientWidth, stage.clientHeight); return; }
+  watLeave('wat');
   if (V.spin > 0) { const st = Math.min(V.spin, reduce ? Math.PI : .16); rotBy(st, 0); V.spin -= st; }
   else if (V.reset) { holder.quaternion.slerp(V.reset, .15); if (holder.quaternion.angleTo(V.reset) < .002) { holder.quaternion.copy(V.reset); V.reset = null; } }
   else if (!V.drag && Math.abs(V.vx) + Math.abs(V.vy) > 1e-5) { rotBy(V.vx, V.vy); V.vx *= .93; V.vy *= .93; }
@@ -265,7 +269,7 @@ function normTemple() {
     b.base ??= cm ? cm.price : b.unit * 12; b.mp ??= b.base; b.hist ??= b.open ? [Math.round(b.mp)] : [];
   }
 }
-normTemple(); normEndgame(S); normKarma(S); normOuting(S); normStory(S); normLife(S); normWorld(S);
+normTemple(); normEndgame(S); normKarma(S); normOuting(S); normStory(S); normLife(S); normWorld(S); normWat(S);
 // เชื่อมโมดูลเป้าหมายหลัง Lv.6 (endgame.js ไม่ import จาก game.js จึงส่งฟังก์ชันผ่าน api แบบเรียกทีหลัง)
 initEndgame({
   S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(), reModal: h => reModal(h),
@@ -285,6 +289,14 @@ initStory({
   stars: () => stars(), legendsOwned: () => legendsOwned(), addItem: (p, paid) => { takeItem({ ...p, id: S.nextId++, ask: paid }); }, tlog: (m, k) => tlog(m, k),
   thumbKey: (m, spec, cond, seed) => { const k = String(hash(JSON.stringify([m.id, spec, cond, seed]))); XA.set(k, [m, spec, cond, seed]); return k; },
   achPop: t => toast(`🏆 ความสำเร็จ: ${t}`, 'ach'),
+});
+// เชื่อมโมดูลวัดในอุปถัมภ์ (wat.js + ฉาก 3D watscene.js ที่ใช้ renderer ตัวหลัก)
+initWat({
+  S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(), reModal: h => reModal(h),
+  lvl: () => lvl(), modelById: id => modelById(id), addMerit: n => addMerit(n), addKarma: n => addKarma(n), addClue: t => addClue(t), bump: k => bump(k), queueEnding: id => queueEnding(id),
+  offerFor: it => offerFor(it), sellAt: (it, p, msg) => sell(it, { price: p, msg }), sfx: n => sfx(n), audio: () => audio(), toShop: () => toShop(),
+  setMode: m => { pauseDaily(); leaveMode(mode); oLeave(mode); tLeave(mode); mode = m; ownItem = null; spot = null; lastShown = null; closeModal(); render(); },
+  pixel: on => { R.setPixelRatio(on ? Math.max(1 / 3, (devicePixelRatio || 1) / 3) : Math.min(devicePixelRatio || 1, 2)); stage.classList.toggle('pix', on); resize(); },
 });
 // เชื่อมโมดูลโลกวงการพระ โหมดเสริม และการแชร์ (world.js)
 initWorld({
@@ -308,7 +320,7 @@ initOuting({
   thumbKey: (m, spec, cond, seed, res) => { const k = String(hash(JSON.stringify([m.id, spec, cond, seed, res]))); XA.set(k, [m, spec, cond, seed, res]); return k; },
   thumbImg: (m, spec, cond, seed, cb) => thumbLater('dig:' + hash(JSON.stringify([m.id, spec, seed])), [m, spec, cond, seed, ['front'], .5], u => cb(u[0])),
   addMerit: n => addMerit(n), addKarma: n => addKarma(n), goodMult: () => goodMult(), tlog: (m, k) => tlog(m, k), endDay: o => endDay(o),
-  templeName: id => (TEMPLES.find(t => t.id === id) || { name: 'วัด' }).name, bump: k => bump(k),
+  templeName: id => (TEMPLES.find(t => t.id === id) || { name: 'วัด' }).name, bump: k => bump(k), fairToday: () => fairToday(),
 });
 initKarma({
   S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(), reModal: h => reModal(h),
@@ -401,7 +413,7 @@ function makeCustomer(r, L) {
 }
 function genQueue() {
   const r = rng(hash('d' + S.day + ':' + S.seed)), L = lvl(); S.queue = [];
-  for (let i = 0, n = 4 + Math.floor(L / 2) + Object.keys(S.duel.regs).length; i < n + extraCustomers() + festCustomers(); i++) S.queue.push(makeCustomer(r, L));
+  for (let i = 0, n = 4 + Math.floor(L / 2) + Object.keys(S.duel.regs).length; i < n + extraCustomers() + festCustomers() + watCustomers(); i++) S.queue.push(makeCustomer(r, L));
   const lc = legendCustomer(r); if (lc) S.queue.splice(Math.min(2, S.queue.length), 0, lc);
   for (const c of S.queue) attachCert(c, r);
   for (const lc2 of lostCustomers(r)) S.queue.splice(Math.floor(r() * (S.queue.length + 1)), 0, lc2);
@@ -415,6 +427,7 @@ let mode = 'shop', ownItem = null, lastShown = null;
 const coarse = matchMedia('(pointer: coarse)').matches;
 const HINT = coarse ? 'ลากนิ้วเพื่อหมุน • ถ่างสองนิ้วเพื่อซูม/เลื่อน' : 'ลากเพื่อหมุน • ล้อเมาส์ซูม • Shift+ลากเลื่อน • ดับเบิลคลิกรีเซ็ต';
 function loadStage() {
+  if (mode === 'wat') { $('#card').innerHTML = watCard(); lastShown = null; return; }
   let key = null, args = null;
   if (mode === 'own' && ownItem) { key = 'i' + ownItem.id; args = [modelById(ownItem.modelId), ownItem.spec, ownItem.cond, ownItem.seed]; }
   else if (mode === 'daily') { const it = DS[D.run.idx]; key = 'd' + D.run.date + ':' + D.run.idx; args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
@@ -438,8 +451,8 @@ function render() {
   $('#rep').innerHTML = `${S.rep}<small>ชื่อเสียง</small>`;
   $('#mk').innerHTML = mkHTML();
   $('#day').innerHTML = `${S.day}<small>วันที่</small>`;
-  renderCard(); renderActs(); renderTabs(); loadStage(); renderSpotBar(); renderChips(); checkTut(); checkAch(); applyDecor(stage); renderCat(stage);
-  $('#hint').textContent = spotting() ? 'แตะ = ชี้จุดที่ผิด • ลาก = หมุน' : HINT;
+  renderCard(); renderActs(); renderTabs(); loadStage(); renderSpotBar(); renderChips(); checkTut(); checkAch(); applyDecor(stage); renderCat(stage); stage.classList.toggle('wat', mode === 'wat');
+  $('#hint').textContent = mode === 'wat' ? 'ลากเพื่อเลื่อน • ถ่างนิ้ว/ล้อเมาส์ซูม • แตะคนเพื่อคุย' : spotting() ? 'แตะ = ชี้จุดที่ผิด • ลาก = หมุน' : HINT;
   const q = $('#qinfo'); q.innerHTML = '';
   if (mode === 'ta') q.innerHTML = tQinfo();
   if (mode === 'daily') q.innerHTML = `<span class="badge gold" id="dtimer">⏱ ${fmtTime(dElapsed())}</span>`;
@@ -515,6 +528,8 @@ function renderActs() {
     el.innerHTML = rows(toolBtns(), oActs(mode));
   } else if (mode === 'ta') {
     el.innerHTML = rows(toolBtns(), tActs());
+  } else if (mode === 'wat') {
+    el.innerHTML = watActs();
   } else if (mode === 'recv') {
     el.innerHTML = rows(toolBtns(), kActs(mode));
   } else if (mode === 'shop' && S.queue[0] && S.queue[0].victim && !spotting()) {
@@ -531,8 +546,8 @@ function renderActs() {
 }
 function renderTabs() {
   const L = lvl();
-  const T = [['shop', 'หน้าร้าน'], ['inv', 'ตู้พระ', '', S.inv.length], ['contest', 'ประกวด', L < 3 ? 'Lv.3' : ''], ['temple', 'จัดสร้าง', L < 5 ? 'Lv.5' : ''], ['book', 'สมุด']];
-  $('#tabs').innerHTML = T.map(([k, n, lk, ct]) => `<button class="tab ${(k === 'shop' && mode === 'shop') || (k === 'inv' && mode === 'own') ? 'on' : ''}" data-tab="${k}">${n}${lk ? `<span class="lk">ปลดล็อก ${lk}</span>` : ''}${ct ? `<span class="ct">${ct}</span>` : ''}</button>`).join('');
+  const T = [['shop', 'หน้าร้าน'], ['inv', 'ตู้พระ', '', S.inv.length], ['wat', 'วัด', watUnlocked() ? '' : 'Lv.5'], ['temple', 'จัดสร้าง', L < 5 ? 'Lv.5' : ''], ['book', 'สมุด']];
+  $('#tabs').innerHTML = T.map(([k, n, lk, ct]) => `<button class="tab ${(k === 'shop' && mode === 'shop') || (k === 'inv' && mode === 'own') || (k === 'wat' && mode === 'wat') ? 'on' : ''}" data-tab="${k}">${n}${lk ? `<span class="lk">ปลดล็อก ${lk}</span>` : ''}${ct ? `<span class="ct">${ct}</span>` : ''}</button>`).join('');
 }
 
 /* ================= actions ================= */
@@ -643,6 +658,7 @@ function finishPass(c) {
   nextCustomer();
 }
 function onTap(x, y) {
+  if (mode === 'wat') { const r = canvas.getBoundingClientRect(); watTap(x - r.left, y - r.top, r.width, r.height); return; }
   if (!spotting() || spot.busy) return;
   const hit = pickPart(x, y), m = modelById(S.queue[0].modelId);
   if (!hit) { toast('แตะให้โดนองค์พระ หรือกด "เลือกจากรายการ"'); return; }
@@ -730,7 +746,7 @@ function endDay(opts = {}) {
   for (const it of S.inv.filter(x => x.consign && S.day >= x.consign.until)) {
     S.inv = S.inv.filter(x => x !== it); lines.push(['', `${it.consign.owner}มารับ ${modelById(it.modelId).name} คืน (ฝากขายครบ 5 วันแล้วยังขายไม่ออก)`]);
   }
-  endgameDay(lines); karmaDay(lines); digDay(lines); ordersDay(lines); lifeDay(lines); marketDay(lines);
+  endgameDay(lines); karmaDay(lines); digDay(lines); ordersDay(lines); lifeDay(lines); marketDay(lines); watDay(lines);
   const rent = 200 + 300 * L0; S.money -= rent; lines.push(['', `ค่าเช่าแผงพระ ${fmt(-rent)}`]);
   if (S.loan.amt > 0) {
     const fee = Math.round(S.loan.amt * .03); S.loan.amt += fee;
@@ -770,7 +786,7 @@ function dayBatch(b, lines) {
     const hoard = b.hoard === S.day;
     let n = Math.min(avail - b.sold, Math.round(b.qty * (.06 + r() * .09) * (.7 + t.fame * .35) * (1 + S.rep / 120) * (.5 + b.hype / 100)));
     if (hoard) n = Math.floor(n / 2);
-    b.sold += n; const rev = n * b.unit; S.money += Math.round(rev * .7); gainXP(n / 15);
+    b.sold += n; const rev = n * b.unit; S.money += Math.round(rev * .7); watShare(t.id, rev * .3); gainXP(n / 15);
     if (n > 0) { S.trust[t.id] = clamp(tTrust(t.id) + 1, 0, 100); addMerit(1); }
     lines.push(['good', `${nm}: บูชาออกไป ${n} องค์${hoard ? ' (กั๊กของไว้ครึ่งหนึ่ง)' : ''} รายได้ ${fmt(rev * .7)} (ถวายวัด ${fmt(rev * .3)})`]);
     if (b.sold >= avail) {
@@ -785,7 +801,7 @@ function dayBatch(b, lines) {
     const fk = ingrList(cm.spec.ingr || '').filter(x => x.fake);
     lines.push(['bad', `ข่าวฉาว! เพจ "${pick(r, PAGES)}" แฉว่า ${nm} ปั่นราคา${fk.length ? ` และใช้มวลสารเทียม (${fk.map(x => INGR[x.id].name).join(', ')})` : ''} • กระแสเหลือ 0 ราคาตลาด −50% ชื่อเสียง −15 • ${t.name}ไม่รับจัดสร้างกับคุณ 30 วัน`]);
     b.hype = 0; b.heat = 0; b.mp = Math.round(b.mp * .5); b.base = Math.round(b.base * .7); b.scandal = (b.scandal || 0) + 1;
-    S.rep = Math.max(0, S.rep - 15); S.trust[t.id] = clamp(tTrust(t.id) - 40, 0, 100); S.templeBan[t.id] = S.day + 30;
+    S.rep = Math.max(0, S.rep - 15); S.trust[t.id] = clamp(tTrust(t.id) - 40, 0, 100); S.templeBan[t.id] = S.day + 30; watScandal(t.id, lines);
   }
   b.hype = Math.max(0, b.hype - (b.coded ? 4 : 6)); b.heat = Math.max(0, b.heat - 3);
   const target = b.base * (.5 + b.hype / 80);
@@ -1214,6 +1230,7 @@ const tlog = (msg, kind = '') => { S.tlog.push([kind, msg]); toast(msg, kind); }
 function bAct(id, act) {
   const b = bById(id); if (!b || !b.open) return; const cm = modelById(b.modelId), t = tObj(b.temple), nm = cm.name;
   const white = ['live', 'review', 'special'].includes(act), grey = ['hoard', 'buyback', 'rumor'].includes(act);
+  if (grey && b.actG !== S.day) watGrey(t.id);
   if ((white && b.actW === S.day) || (grey && b.actG === S.day)) { toast('วันนี้ทำกิจกรรมแบบนี้กับรุ่นนี้ไปแล้ว', 'bad'); return; }
   const tr = d => { S.trust[t.id] = clamp(tTrust(t.id) + d, 0, 100); };
   if (act === 'live') { b.actW = S.day; save(); LIVE = { bid: id, i: 0, pts: 0, fb: '', seen: [] }; nextLiveQ(); openModal(liveHTML()); return; }
@@ -1264,14 +1281,14 @@ function makeBatch() {
   const c = templeCost(), t = c.t, why = templeOK(t) || nickErr(TF.nick) || (S.money < c.cost ? 'เงินไม่พอ' : ''); if (why) { toast(why, 'bad'); return; }
   const st = designStats(), ings = pickedIng(), nick = TF.nick.trim(), id = 'c' + S.nextId++, spec = designSpec();
   const seqB = TF.seq ? S.batches.find(b => b.id === TF.seq) : null; if (seqB) seqB.seqUsed = true;
-  const base = Math.round(c.unit * 12 * (1 + st.pricePct));
+  const wm = watBatchMods(t.id), base = Math.round(c.unit * 12 * (1 + st.pricePct) * wm.mult);
   S.money -= c.cost;
   S.custom.push({ id, custom: true, ready: false, temple: t.id, nick, name: fullName(nick, t, TF.shape), shape: TF.shape, mat: TF.mat, lvl: 99, price: base, spec });
-  S.batches.push({ id, modelId: id, temple: t.id, qty: +TF.qty, sold: 0, keep: c.keepN, stock: c.keepN, unit: c.unit, ready: S.day + 3, open: false, done: false,
-    hype: st.hype, heat: st.heat, base, mp: Math.round(base * (.5 + st.hype / 80)), hist: [], preorder: seqB ? Math.round((TF.qty - c.keepN) * .15) : 0, seq: !!seqB });
+  S.batches.push({ id, modelId: id, temple: t.id, qty: +TF.qty, sold: 0, keep: c.keepN, stock: c.keepN, unit: c.unit, ready: S.day + wm.days, open: false, done: false,
+    hype: Math.min(100, st.hype + wm.hype), heat: st.heat, base, mp: Math.round(base * (.5 + st.hype / 80)), hist: [], preorder: seqB ? Math.round((TF.qty - c.keepN) * .15) : 0, seq: !!seqB });
   const nf = ings.filter(g => g.fake).length; if (nf) S.trust[t.id] = clamp(tTrust(t.id) - 8 * nf, 0, 100);
   const found = st.recs.filter(R => !S.recipes[R.id]); for (const R of st.recs) S.recipes[R.id] = true;
-  S.tlog.push(['gold', `สั่งจัดสร้าง ${fullName(nick, t, TF.shape)} ${TF.qty.toLocaleString()} องค์ ที่${t.name} (เสร็จวันที่ ${S.day + 3})${found.length ? ` • ค้นพบ${found.map(R => R.name).join(', ')}` : ''}`]);
+  S.tlog.push(['gold', `สั่งจัดสร้าง ${fullName(nick, t, TF.shape)} ${TF.qty.toLocaleString()} องค์ ที่${t.name} (เสร็จวันที่ ${S.day + wm.days})${found.length ? ` • ค้นพบ${found.map(R => R.name).join(', ')}` : ''}`]);
   gainXP(50); Object.assign(TF, { nick: '', step: 1, seq: '', view: '' });
   if (found.length) { sfx('level'); openModal(`<div class="announce"><p class="big">✨ ค้นพบตำรับลับ! ✨</p>${found.map(R => `<h2>${esc(R.name)}</h2><p>${esc(R.need.map(i => INGR[i].name).join(' + '))}</p><p class="good">${esc(R.txt)}</p>`).join('')}<p class="note">บันทึกไว้ในสมุดหน้า "ตำรับที่ค้นพบ" แล้ว</p><div class="row"><button class="btn ok" id="tBack">ไปดูรุ่นที่จัดสร้าง</button></div></div>`); }
   else { toast('สั่งจัดสร้างแล้ว วัดจะทำพิธีและแจ้งเมื่อพร้อมให้บูชา', 'good'); openModal(templeHTML()); }
@@ -1296,9 +1313,9 @@ function buyTool(id) {
   S.money -= t.price; S.tools[id] = true; sfx('buy'); toast(`ได้ ${t.name} มาแล้ว`, 'good'); openModal(toolShopHTML()); render();
 }
 // เริ่มเกมใหม่ (ฉากจบ/ฉายาเก็บไว้ใน META ของ karma.js จึงไม่หาย)
-function restartGame() { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); normEndgame(S); normKarma(S); normOuting(S); normStory(S); normLife(S); normWorld(S); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
+function restartGame() { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); normEndgame(S); normKarma(S); normOuting(S); normStory(S); normLife(S); normWorld(S); normWat(S); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
 function menuHTML() {
-  return `<h2>เมนู</h2>${dailyBtnHTML()}<button class="btn dailyb goalb" data-w="hub">วงการพระ<small>ปฏิทิน ฟีด กระดานราคา ส่องเร็ว 60 วิ การ์ดอวด แลกพระ</small></button><button class="btn dailyb goalb" data-l="lifehub">ร้านของฉัน<small>แชทเสนอพระ ไลฟ์ขายของ แต่งร้าน แมว ความปลอดภัย</small></button><button class="btn dailyb goalb" data-eg="goals">เป้าหมาย<small>${lvl() >= 6 ? `${starTxt(stars()) || '★0'} • ตำนาน ${legendsOwned()}/5` : 'ดวล ประมูล ตำนาน สาขา พิพิธภัณฑ์ สมาคม'}${aucToday() ? ' • วันนี้มีงานประมูล!' : ''}</small></button><div class="row"><button class="btn" id="donateBtn">ทำบุญ ถวายวัด<small>บุญ ${S.merit} • กรรม ${S.karma}</small></button><button class="btn" id="endBookBtn">สมุดฉากจบ</button><button class="btn" data-s="orders">กระดานออเดอร์<small>${ordersCount()} งาน</small></button><button class="btn" data-s="ach">ความสำเร็จ<small>${Object.keys(S.ach).length}/40</small></button><button class="btn" data-o="hub">นอกร้าน<small>${esc(outingBadge() || 'สนามพระ ทริป ขุดกรุ')}</small></button>${S.rumor.on ? '<button class="btn no" id="rumorBtn">แก้ข่าวลือ</button>' : ''}</div>${titles().length ? `<p class="note">ฉายาที่ปลดล็อก: ${esc(titles().join(', '))}</p>` : ''}<h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
+  return `<h2>เมนู</h2>${dailyBtnHTML()}<button class="btn dailyb goalb" data-w="hub">วงการพระ<small>ปฏิทิน ฟีด กระดานราคา ส่องเร็ว 60 วิ การ์ดอวด แลกพระ</small></button><button class="btn dailyb goalb" data-l="lifehub">ร้านของฉัน<small>แชทเสนอพระ ไลฟ์ขายของ แต่งร้าน แมว ความปลอดภัย</small></button><button class="btn dailyb goalb" data-eg="goals">เป้าหมาย<small>${lvl() >= 6 ? `${starTxt(stars()) || '★0'} • ตำนาน ${legendsOwned()}/5` : 'ดวล ประมูล ตำนาน สาขา พิพิธภัณฑ์ สมาคม'}${aucToday() ? ' • วันนี้มีงานประมูล!' : ''}</small></button><div class="row"><button class="btn" id="donateBtn">ทำบุญ ถวายวัด<small>บุญ ${S.merit} • กรรม ${S.karma}</small></button><button class="btn" id="endBookBtn">สมุดฉากจบ</button><button class="btn" id="contestBtn">ประกวดพระ<small>${lvl() >= 3 ? (S.day % 3 === 0 && S.contestDay !== S.day ? "วันนี้มีงาน!" : "ทุก 3 วัน") : "ปลดล็อก Lv.3"}</small></button><button class="btn" data-s="orders">กระดานออเดอร์<small>${ordersCount()} งาน</small></button><button class="btn" data-s="ach">ความสำเร็จ<small>${Object.keys(S.ach).length}/40</small></button><button class="btn" data-o="hub">นอกร้าน<small>${esc(outingBadge() || 'สนามพระ ทริป ขุดกรุ')}</small></button>${S.rumor.on ? '<button class="btn no" id="rumorBtn">แก้ข่าวลือ</button>' : ''}</div>${titles().length ? `<p class="note">ฉายาที่ปลดล็อก: ${esc(titles().join(', '))}</p>` : ''}<h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
   ${S.loan.amt ? `<h3>หนี้เฮียโรงรับจำนำ</h3><p>คงเหลือ <b class="debtc">${fmt(S.loan.amt)}</b> • ดอกเบี้ย 3% ต่อวัน • ${loanLeftDays() > 0 ? `อีก ${loanLeftDays()} วันจะโดนยึดพระ` : 'ครบกำหนดแล้ว ปิดร้านวันนี้จะโดนยึดพระ'}</p>
   <div class="row"><button class="btn ok" id="repayBtn" ${S.money <= 0 ? 'disabled' : ''}>คืนเงิน ${fmt(Math.max(0, Math.min(S.money, S.loan.amt)))}${S.money < S.loan.amt ? '<small>(คืนได้เท่าที่มี)</small>' : ''}</button></div>` : ''}
   <div class="row"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn" id="tutBtn">ดูบทเรียนอีกครั้ง</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
@@ -1317,6 +1334,8 @@ const HOW = `<h2>ยินดีต้อนรับสู่แผงพระ
 <li><b>ส่องพระประจำวัน</b> (ในเมนู ≡): 5 องค์ชุดเดียวกันทุกคน ตอบแค่แท้/เก๊ จับเวลา แล้วคัดลอกผลไปแชร์ เล่นได้วันละครั้ง</li>
 <li>ตั้งแต่ Lv.4 มี <b>ดวลส่องพระ</b> กับเซียนคู่แข่งวันละครั้ง และ <b>งานประมูล</b> ทุก 5 วัน • ถึง Lv.6 XP ที่เกินจะกลายเป็น <b>ดาวบารมี</b> และเปิดการตามล่าพระในตำนาน สาขา พิพิธภัณฑ์ และสมาคม ดูความคืบหน้าทั้งหมดใน <b>เมนู ≡ → เป้าหมาย</b></li>
 <li><b>บุญ</b> และ <b>กรรม</b> (มุมบนจอ): ทำบุญ ช่วยลูกค้าที่โดนหลอก และบอกผู้ซื้อตามจริงเพิ่มบุญ ส่วนทางเลือก <b>สายเทา</b> (แต่งผิวแล้วไม่บอก ติดสินบนกรรมการ จ้างหน้าม้า ปล่อยข่าวโจมตี) ได้เร็วแต่เพิ่มกรรม เสี่ยงโดนแฉและโดนหน่วยปราบพระปลอมเข้าตรวจ • ระวังใบรับรองปลอม และตรวจรับของทุกครั้งก่อนจ่ายเงิน</li>
+<li><b>วงการพระ</b> (เมนู ≡): ปฏิทิน 30 วัน = 1 เดือน มี<b>เทศกาล</b>ที่ทำให้บางรุ่นขายดี, <b>ฟีด</b>ข่าวลือ (เชื่อได้ไม่ทั้งหมด), <b>กระดานราคา</b>ที่ขึ้นลงทุกวัน, โหมด<b>ส่องเร็ว 60 วินาที</b>, <b>การ์ดอวดพระ</b>, <b>รหัสแลกพระ</b>กับเพื่อน และปรับเสียงเพลง/เอฟเฟกต์</li>
+<li><b>วัด</b> (แท็บล่าง): เลือกวัดในอุปถัมภ์ 1 วัด ส่วนแบ่ง 30% จากพระที่จัดสร้างกับวัดและเงินทำบุญเข้ากองทุนวัด วัดจะสร้างอาคารเอง (เสนอได้) อาคารช่วยงานจัดสร้าง บุญ และผู้มาเยือน ถ้าผ่านเกณฑ์จะมีคณะกรรมการตรวจเยี่ยมเพื่อเลื่อนขั้นวัด แต่ถ้าทำสายเทากับวัดบ่อยจะโดนข่าววัดพาณิชย์ • งานประกวดพระย้ายไปอยู่ในเมนู ≡</li>
 <li><b>ร้านของฉัน</b> (เมนู ≡): ลูกค้าทักมาเสนอพระใน<b>แชท</b>พร้อมรูปถ่าย (ถูกแต่เสี่ยง ดูรูปและบัญชีผู้ขายให้ดี ของมาถึงวันรุ่งขึ้น), <b>ไลฟ์</b>ขายของในตู้ให้คนดูประมูล, <b>แต่งร้าน</b> ตั้งชื่อ ฉากหลัง ป้าย ไฟ, รับเลี้ยง<b>แมว</b> (ต้องให้อาหารทุกวัน) และกันโจรด้วยตู้เซฟ กล้อง ประกัน</li>
 <li><b>นอกร้าน</b> (เมนู ≡): วันหยุดไป <b>เดินสนามพระ</b> หาของหลุดจากแผงต่าง ๆ, ไป <b>ทริปต่างจังหวัด</b> ซื้อพระของภาคนั้นราคาต้นทาง และถ้าวัดไว้ใจมากอาจได้รับเชิญไป <b>ขุดกรุ</b></li>
 <li>รับงานจาก <b>กระดานออเดอร์</b> ส่งพระตรงเงื่อนไขได้ค่าตอบแทนดีกว่าตลาด และคอยดู <b>ลูกค้าประจำ</b> ที่แวะมาเล่าเรื่องราวของตัวเอง ทางเลือกของคุณมีผลต่อบุญและกรรม • ดู <b>ความสำเร็จ</b> ทั้ง 40 รายการในเมนู ≡</li>
@@ -1334,18 +1353,20 @@ $('#act').addEventListener('click', e => {
   if (a.startsWith('k:')) { kAct(a.slice(2)); return; }
   if (a.startsWith('o:')) { oAct(a.slice(2)); return; }
   if (a.startsWith('w:')) { tAct(a.slice(2)); return; }
+  if (a.startsWith('t:')) { watAct(a.slice(2)); return; }
   ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, uv: toggleUV, cmp: toggleCmp, framesvc: () => openModal(frameSvcHTML()), dyes: () => dailyAnswer(true), dno: () => dailyAnswer(false), dnext: dailyNext, dexit: toShop, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
      back: toShop, cert: () => certify(ownItem), sell: () => sell(ownItem), scrap: () => scrap(ownItem) })[a]?.();
 });
 $('#tabs').addEventListener('click', e => {
   const t = e.target.closest('[data-tab]')?.dataset.tab; if (!t) return;
-  if (t === 'shop') { closeModal(); toShop(); } else if (t === 'inv') openModal(invHTML()); else if (t === 'contest') openModal(contestHTML()); else if (t === 'temple') openModal(templeHTML()); else openModal(bookHTML());
+  if (t === 'shop') { closeModal(); toShop(); } else if (t === 'inv') openModal(invHTML()); else if (t === 'contest') openModal(contestHTML()); else if (t === 'wat') { if (!watUnlocked()) { toast('แท็บวัดปลดล็อกที่ Lv.5 หรือเมื่อวัดไว้ใจคุณ 40 ขึ้นไป', 'bad'); return; } closeModal(); openWat(); } else if (t === 'temple') openModal(templeHTML()); else openModal(bookHTML());
 });
 $('#mbody').addEventListener('click', e => {
   const own = e.target.closest('[data-own]'); if (own) { const it = S.inv.find(i => String(i.id) === own.dataset.own); if (it) openOwn(it); return; }
   const sk = e.target.closest('[data-spotk]'); if (sk) { closeModal(); commitSpot([sk.dataset.spotk]); return; }
   const bt = e.target.closest('[data-buytool]'); if (bt) { buyTool(bt.dataset.buytool); return; }
   if (e.target.id === 'toolShopBtn') { openModal(toolShopHTML()); return; }
+  if (e.target.closest('#contestBtn')) { openModal(contestHTML()); return; }
   const sh = e.target.closest('[data-short]'); if (sh) { if (!sh.disabled) shortPick(sh.dataset.short); return; }
   const tn = e.target.closest('[data-turn]'); if (tn) { if (!tn.disabled) doTurn(tn.dataset.turn); return; }
   if (e.target.id === 'shortBack') { openModal(shortHTML()); return; }
@@ -1403,6 +1424,7 @@ document.addEventListener('input', e => { const v = e.target.closest('[data-wv]'
 document.addEventListener('click', e => { const eg = e.target.closest('[data-eg]'); if (eg && !eg.disabled) { egClick(eg); return; } });
 document.addEventListener('click', e => {
   const kb = e.target.closest('[data-k]'); if (kb && !kb.disabled) { kClick(kb); return; }
+  const tb = e.target.closest('[data-t]'); if (tb && !tb.disabled) { tClick(tb); return; }
   const wb = e.target.closest('[data-w]'); if (wb && !wb.disabled) { wClick(wb); return; }
   const lb = e.target.closest('[data-l]'); if (lb && !lb.disabled) { lClick(lb); return; }
   const sb = e.target.closest('[data-s]'); if (sb && !sb.disabled) { sClick(sb); return; }
