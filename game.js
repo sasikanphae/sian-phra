@@ -1,6 +1,7 @@
 import * as THREE from './three.module.min.js';
 import { $, clamp, lerp, rng, hash, fmt, pick, esc, round100, wpick, inPoly, mk } from './util.js';
 import { SUBP, subsOf, subOf, RAR, REGIONS, CATS, isCoin, catOf, FRAMES, MATS, THW, TELLS, tellTxt, MODELS, LEVELS, UNLOCK, TEMPLES, PIMS, DW, mWeight, TOOLS, INGR, RECIPES, EVENTS, PAGES, LIVE_T, LIVE_Q, VIEWERS, LUCKY, NAME_A, NAME_B, ingrList, ingrKey, ingrTxt, mutIngr, UNIT, NAMES, HONEST, SLICK } from './data.js';
+import { initWorld, normWorld, festCustomers, mktMult, marketDay, worldHTML, wClick, worldBadge, setVol, musicOn, tPiece, tKey, tCard, tActs, tAct, tLeave, tQinfo, tTick } from './world.js';
 import { initLife, normLife, lifeDay, extraCustomers, catPatience, applyDecor, renderCat, lClick, hubHTML as lifeHubHTML, lifeBadge } from './shoplife.js';
 import { initStory, normStory, bump, ordersDay, ordersCount, storyDay, lostCustomers, onAcquire, storyBadge, phumBonus, checkAch, sClick } from './story.js';
 import { initOuting, normOuting, weekend, hubHTML, oPiece, oKey, oCard, oActs, oAct, oLeave, oClick, awayLine, digDay, outingBadge } from './outing.js';
@@ -180,6 +181,13 @@ function snap(key, m, spec, cond, seed, views, res = .5) {
   const out = views.map(v => { grp.rotation.set(v === 'side' ? .18 : 0, v === 'back' ? Math.PI : v === 'side' ? 1.25 : 0, 0); TR.render(TS, TC); return TR.domElement.toDataURL('image/jpeg', .86); });
   TS.remove(grp); disposeGroup(grp); THUMB.set(key, out); return out;
 }
+// ภาพใหญ่สำหรับการ์ดอวดพระ: ขยาย thumbnail renderer ชั่วคราว (สัดส่วน 4:5 เท่าเดิม กล้องไม่ต้องขยับ)
+function snapBig(m, spec, cond, seed, frame) {
+  snap('_init', m, spec, cond, seed, []); THUMB.delete('_init');
+  TR.setSize(720, 900, false); TR.setClearColor(0x000000, 0);
+  const grp = buildAmulet(m, spec, cond, seed, 1, { frame: frame || null }); TS.add(grp); grp.rotation.set(0, 0, 0); TR.render(TS, TC);
+  const url = TR.domElement.toDataURL('image/png'); TS.remove(grp); disposeGroup(grp); TR.setSize(240, 300, false); TR.setClearColor(0x2a130e, 1); return url;
+}
 function thumbLater(key, args, cb) { if (THUMB.has(key)) { cb(THUMB.get(key)); return; } jobs.push({ key, args, cb }); if (jobs.length === 1) setTimeout(runJobs, 30); }
 function runJobs() { const j = jobs.shift(); if (!j) return; try { j.cb(snap(j.key, ...j.args)); } catch (e) { console.error(e); } if (jobs.length) setTimeout(runJobs, 16); }
 const PVA = new Map();
@@ -200,7 +208,8 @@ let AC = null, OUTG = null;
 function audio() {
   if (S && S.mute) return null;
   try {
-    if (!AC) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; AC = new C(); OUTG = AC.createGain(); OUTG.gain.value = .5; OUTG.connect(AC.destination); }
+    if (!AC) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; AC = new C(); OUTG = AC.createGain(); OUTG.connect(AC.destination); }
+    OUTG.gain.value = .5 * (S && S.vol ? S.vol.sfx : 1);
     if (AC.state === 'suspended') AC.resume();
   } catch (e) { return null; }
   return AC;
@@ -256,7 +265,7 @@ function normTemple() {
     b.base ??= cm ? cm.price : b.unit * 12; b.mp ??= b.base; b.hist ??= b.open ? [Math.round(b.mp)] : [];
   }
 }
-normTemple(); normEndgame(S); normKarma(S); normOuting(S); normStory(S); normLife(S);
+normTemple(); normEndgame(S); normKarma(S); normOuting(S); normStory(S); normLife(S); normWorld(S);
 // เชื่อมโมดูลเป้าหมายหลัง Lv.6 (endgame.js ไม่ import จาก game.js จึงส่งฟังก์ชันผ่าน api แบบเรียกทีหลัง)
 initEndgame({
   S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(), reModal: h => reModal(h),
@@ -276,6 +285,14 @@ initStory({
   stars: () => stars(), legendsOwned: () => legendsOwned(), addItem: (p, paid) => { takeItem({ ...p, id: S.nextId++, ask: paid }); }, tlog: (m, k) => tlog(m, k),
   thumbKey: (m, spec, cond, seed) => { const k = String(hash(JSON.stringify([m.id, spec, cond, seed]))); XA.set(k, [m, spec, cond, seed]); return k; },
   achPop: t => toast(`🏆 ความสำเร็จ: ${t}`, 'ach'),
+});
+// เชื่อมโมดูลโลกวงการพระ โหมดเสริม และการแชร์ (world.js)
+initWorld({
+  S: () => S, save: () => save(), render: () => render(), toast: (m, k) => toast(m, k), openModal: h => openModal(h), closeModal: () => closeModal(), reModal: h => reModal(h),
+  lvl: () => lvl(), mutate: (...a) => mutate(...a), cf: c => cf(c), modelById: id => modelById(id), gainXP: n => gainXP(n), sfx: n => sfx(n), bump: k => bump(k),
+  addMerit: n => addMerit(n), addKarma: n => addKarma(n), addItem: (p, paid) => { takeItem({ ...p, id: S.nextId++, ask: paid }); }, audio: () => audio(), get site() { return SITE; },
+  setMode: m => { pauseDaily(); leaveMode(mode); oLeave(mode); tLeave(mode); mode = m; ownItem = null; spot = null; lastShown = null; closeModal(); render(); },
+  title: () => { const L = lvl(), st = stars(); return L >= 6 && st ? `${starTxt(st)} ${starTitle(st)}` : `Lv.${L} ${LEVELS[L - 1].name}`; }, snapBig: (...a) => snapBig(...a),
 });
 // เชื่อมโมดูลช่องทางขายใหม่และชีวิตในร้าน (shoplife.js)
 initLife({
@@ -357,7 +374,7 @@ function makeCustomer(r, L) {
     const b = pick(r, hot);
     if (r() < (b.coded ? .125 : .25)) {
       const m = modelById(b.modelId), genuine = r() < .25, spec = genuine ? { ...m.spec } : fakeOwn(m.spec, r), cond = Math.round(80 + r() * 20);
-      const ask = round100(m.price * cf(cond) * (genuine ? .55 + r() * .6 : .45 + r() * .5));
+      const ask = round100(m.price * mktMult(m) * cf(cond) * (genuine ? .55 + r() * .6 : .45 + r() * .5));
       return { id: S.nextId++, name: pick(r, NAMES), line: pick(r, genuine ? HONEST : SLICK), modelId: m.id, genuine, spec, cond, ask, patience: 1 + Math.floor(r() * 3), seed: Math.floor(r() * 1e9) };
     }
   }
@@ -377,14 +394,14 @@ function makeCustomer(r, L) {
   // พิมพ์ย่อย: พิมพ์จริง (spec.sub) กับพิมพ์ที่ลูกค้าอ้าง (claim) บางคนอ้างพิมพ์นิยมเกินจริง — ไม่ใช่ของเก๊ แต่จ่ายแพงเกินถ้าเชื่อ
   const subs = subsOf(m); let claim = null;
   if (subs) { const act = wpick(r, subs.map(x => [x, x.w])), up = subs.filter(x => x.mult > act.mult); spec.sub = act.id; claim = (up.length && r() < .25 ? pick(r, up) : act).id; }
-  const market = m.price * (claim ? subOf(m, claim).mult : 1) * cf(cond), ask = round100(market * (genuine ? .55 + r() * .6 : .45 + r() * .5));
+  const market = m.price * mktMult(m) * (claim ? subOf(m, claim).mult : 1) * cf(cond), ask = round100(market * (genuine ? .55 + r() * .6 : .45 + r() * .5));
   const honest = genuine ? r() < .65 : r() < .35;
   const frame = m.kind === 'flat' && r() < .2 ? wpick(r, Object.entries(FRAMES).map(([k, F]) => [k, 1 / F.w])) : null;
   return { id: S.nextId++, name: pick(r, NAMES), line: pick(r, honest ? HONEST : SLICK), modelId: m.id, genuine, spec, cond, ask, patience: 1 + Math.floor(r() * 3), seed: Math.floor(r() * 1e9), claim, frame };
 }
 function genQueue() {
   const r = rng(hash('d' + S.day + ':' + S.seed)), L = lvl(); S.queue = [];
-  for (let i = 0, n = 4 + Math.floor(L / 2) + Object.keys(S.duel.regs).length; i < n + extraCustomers(); i++) S.queue.push(makeCustomer(r, L));
+  for (let i = 0, n = 4 + Math.floor(L / 2) + Object.keys(S.duel.regs).length; i < n + extraCustomers() + festCustomers(); i++) S.queue.push(makeCustomer(r, L));
   const lc = legendCustomer(r); if (lc) S.queue.splice(Math.min(2, S.queue.length), 0, lc);
   for (const c of S.queue) attachCert(c, r);
   for (const lc2 of lostCustomers(r)) S.queue.splice(Math.floor(r() * (S.queue.length + 1)), 0, lc2);
@@ -401,6 +418,7 @@ function loadStage() {
   let key = null, args = null;
   if (mode === 'own' && ownItem) { key = 'i' + ownItem.id; args = [modelById(ownItem.modelId), ownItem.spec, ownItem.cond, ownItem.seed]; }
   else if (mode === 'daily') { const it = DS[D.run.idx]; key = 'd' + D.run.date + ':' + D.run.idx; args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
+  else if (tPiece(mode)) { const it = tPiece(mode); key = tKey(mode); args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (oPiece(mode)) { const it = oPiece(mode); key = oKey(mode); args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (kPiece(mode)) { const it = kPiece(mode); key = kKey(mode); args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
   else if (modePiece(mode)) { const it = modePiece(mode); key = modeKey(mode); args = [modelById(it.modelId), it.spec, it.cond, it.seed]; }
@@ -423,10 +441,12 @@ function render() {
   renderCard(); renderActs(); renderTabs(); loadStage(); renderSpotBar(); renderChips(); checkTut(); checkAch(); applyDecor(stage); renderCat(stage);
   $('#hint').textContent = spotting() ? 'แตะ = ชี้จุดที่ผิด • ลาก = หมุน' : HINT;
   const q = $('#qinfo'); q.innerHTML = '';
+  if (mode === 'ta') q.innerHTML = tQinfo();
   if (mode === 'daily') q.innerHTML = `<span class="badge gold" id="dtimer">⏱ ${fmtTime(dElapsed())}</span>`;
   if (mode === 'duel' || mode === 'auction') q.innerHTML = modeQinfo(mode);
   if (mode === 'shop' && S.queue.length) q.innerHTML = `<span class="badge">ลูกค้ารอ ${S.queue.length} คน</span>` + (L >= 3 && S.day % 3 === 0 && S.contestDay !== S.day ? `<span class="badge gold">วันนี้มีงานประกวดพระ</span>` : '');
   if (mode === 'shop' && storyBadge()) q.innerHTML += `<button class="badge gold qbtn" data-s="story">${esc(storyBadge())} แตะเพื่อคุย</button>`;
+  if (mode === 'shop' && worldBadge()) q.innerHTML += `<button class="badge gold qbtn" data-w="hub">${esc(worldBadge())} แตะเพื่อดู</button>`;
   if (mode === 'shop' && lifeBadge()) q.innerHTML += `<button class="badge qbtn" data-l="lifehub">${esc(lifeBadge())} แตะเพื่อดู</button>`;
   if (mode === 'shop' && outingBadge()) q.innerHTML += `<button class="badge good qbtn" data-o="hub">${outingBadge()} แตะเพื่อไป</button>`;
   if (mode === 'shop' && S.rumor.on) q.innerHTML += '<button class="badge bad qbtn" id="rumorBtn">มีข่าวลือว่าร้านขายของเก๊! แตะเพื่อแก้ข่าว</button>';
@@ -447,6 +467,7 @@ function renderCard() {
   if (mode === 'duel' || mode === 'auction') { el.innerHTML = modeCard(mode); return; }
   if (mode === 'recv') { el.innerHTML = kCard(mode); return; }
   if (mode === 'outing') { el.innerHTML = oCard(mode); return; }
+  if (mode === 'ta') { el.innerHTML = tPiece(mode) ? tCard() : ''; return; }
   if (mode === 'daily') {
     const R0 = D.run, it = DS[R0.idx], m = modelById(it.modelId), ok = R0.ans[R0.idx];
     const marks = R0.ans.map(a => a ? '🟩' : '🟥').join('') + '⬜'.repeat(5 - R0.ans.length);
@@ -492,6 +513,8 @@ function renderActs() {
     el.innerHTML = rows(toolBtns(), modeActs(mode));
   } else if (mode === 'outing') {
     el.innerHTML = rows(toolBtns(), oActs(mode));
+  } else if (mode === 'ta') {
+    el.innerHTML = rows(toolBtns(), tActs());
   } else if (mode === 'recv') {
     el.innerHTML = rows(toolBtns(), kActs(mode));
   } else if (mode === 'shop' && S.queue[0] && S.queue[0].victim && !spotting()) {
@@ -650,7 +673,7 @@ function renderSpotBar() {
 }
 const certFee = it => round100(Math.max(500, modelById(it.modelId).price * .03));
 const scrapVal = it => round100(modelById(it.modelId).price * .02);
-function offerFor(it) { const m = modelById(it.modelId), r = rng(hash(it.id + ':' + S.day)); return (it.frame ? FRAMES[it.frame].val : 0) + round100(starMult() * (it.spec && it.spec.crust ? 1.25 : 1) * m.price * subMult(it) * cf(it.cond) * (it.cert ? 1.15 : 1) * (1 + .1 * it.award) * (1 + S.rep / 300) * (.9 + r() * .18)); }
+function offerFor(it) { const m = modelById(it.modelId), r = rng(hash(it.id + ':' + S.day)); return (it.frame ? FRAMES[it.frame].val : 0) + round100(starMult() * (it.spec && it.spec.crust ? 1.25 : 1) * m.price * mktMult(m) * subMult(it) * cf(it.cond) * (it.cert ? 1.15 : 1) * (1 + .1 * it.award) * (1 + S.rep / 300) * (.9 + r() * .18)); }
 function revealXP(it) { const m = modelById(it.modelId); it.xp = true; return 15 + clamp(Math.round((m.price * cf(it.cond) - (it.ask ?? it.paid)) / (m.price * .05)), 0, 20) * 2; }
 // ส่วนที่เป็นของผู้เล่นเมื่อขายได้ p: ฝากขาย = ส่วนเกินราคาเจ้าของ (ขั้นต่ำ 10%), หุ้น = ครึ่งหนึ่ง
 function myCut(it, p) { return it.consign ? Math.max(p - it.consign.price, round100(p * .1)) : it.share ? Math.round(p / 2) : p; }
@@ -675,8 +698,8 @@ function scrap(it) {
   if (it.consign) { toast(`คืนพระให้${it.consign.owner}แล้ว`); toShop(); return; }
   const v = it.share ? Math.round(scrapVal(it) / 2) : scrapVal(it); S.money += v; toast(`ขายเป็นของที่ระลึก ได้ ${fmt(v)}${it.share ? ' (แบ่งเพื่อนครึ่งหนึ่ง)' : ''}`); toShop();
 }
-function toShop() { pauseDaily(); leaveMode(mode); oLeave(mode); mode = 'shop'; ownItem = null; render(); }
-function openOwn(it) { pauseDaily(); leaveMode(mode); oLeave(mode); mode = 'own'; ownItem = it; closeModal(); render(); }
+function toShop() { pauseDaily(); leaveMode(mode); oLeave(mode); tLeave(mode); mode = 'shop'; ownItem = null; render(); }
+function openOwn(it) { pauseDaily(); leaveMode(mode); oLeave(mode); tLeave(mode); mode = 'own'; ownItem = it; closeModal(); render(); }
 
 function endDay(opts = {}) {
   const lines = [], L0 = lvl(), shows = [];
@@ -707,7 +730,7 @@ function endDay(opts = {}) {
   for (const it of S.inv.filter(x => x.consign && S.day >= x.consign.until)) {
     S.inv = S.inv.filter(x => x !== it); lines.push(['', `${it.consign.owner}มารับ ${modelById(it.modelId).name} คืน (ฝากขายครบ 5 วันแล้วยังขายไม่ออก)`]);
   }
-  endgameDay(lines); karmaDay(lines); digDay(lines); ordersDay(lines); lifeDay(lines);
+  endgameDay(lines); karmaDay(lines); digDay(lines); ordersDay(lines); lifeDay(lines); marketDay(lines);
   const rent = 200 + 300 * L0; S.money -= rent; lines.push(['', `ค่าเช่าแผงพระ ${fmt(-rent)}`]);
   if (S.loan.amt > 0) {
     const fee = Math.round(S.loan.amt * .03); S.loan.amt += fee;
@@ -785,6 +808,7 @@ function curPiece() {
   if (modePiece(mode)) return modePiece(mode);
   if (kPiece(mode)) return kPiece(mode);
   if (oPiece(mode)) return oPiece(mode);
+  if (tPiece(mode)) return tPiece(mode);
   return mode === 'shop' ? S.queue[0] || null : null;
 }
 // เช็กลิสต์: ผู้เล่นติ๊กเอง เกมไม่ช่วยตอบ ล้างเมื่อเปลี่ยนองค์ (ใน loadStage)
@@ -801,7 +825,7 @@ function renderChips() {
   const el = $('#chips'), it = curPiece(), on = !!it; stage.classList.toggle('spotting', spotting());
   el.hidden = !on; $('#clp').hidden = !(on && CL.open);
   if (!on) return;
-  const nm = Object.keys(CL.marks).length, canAsk = mode !== 'daily' && mode !== 'duel';
+  const nm = Object.keys(CL.marks).length, canAsk = mode !== 'daily' && mode !== 'duel' && mode !== 'ta';
   const m = modelById(it.modelId), canShake = m && ('rattle' in m.spec || 'mercury' in m.spec);
   const certChip = mode === 'shop' && it.certCard ? `<button class="chip" id="certBtn">ตรวจใบเซอร์<small>${it.certPaid ? 'ดูอีกครั้ง' : fmt(500)}</small></button>` : '';
   const dressChip = mode === 'own' && !it.dressed && !it.consign && it.cert !== false ? `<button class="chip grey" id="dressBtn">แต่งผิว<small>สายเทา</small></button>` : '';
@@ -958,7 +982,7 @@ function dailyBtnHTML() {
   const today = bkkDate(), st = D.last && D.last.date === today ? `เล่นแล้ววันนี้ ${D.last.score}/5 • ดูผล` : D.run && D.run.date === today ? `เล่นต่อ องค์ที่ ${D.run.idx + 1}/5` : `#${dayNo(today)} • 5 องค์ ชุดเดียวกันทุกคน`;
   return `<button class="btn ok dailyb" id="dailyBtn">ส่องพระประจำวัน<small>${st}</small></button>`;
 }
-setInterval(() => egTick(mode), 250);
+setInterval(() => { egTick(mode); tTick(mode); }, 250);
 setInterval(() => {
   const t = $('#dtimer'); if (t && mode === 'daily') t.textContent = '⏱ ' + fmtTime(dElapsed());
   const cd = $('#cd'); if (cd) cd.textContent = D.last && D.last.date !== bkkDate() ? 'พร้อมแล้ว! เปิดเมนูเพื่อเล่นชุดใหม่' : fmtHMS(msToMidnight());
@@ -1272,9 +1296,9 @@ function buyTool(id) {
   S.money -= t.price; S.tools[id] = true; sfx('buy'); toast(`ได้ ${t.name} มาแล้ว`, 'good'); openModal(toolShopHTML()); render();
 }
 // เริ่มเกมใหม่ (ฉากจบ/ฉายาเก็บไว้ใน META ของ karma.js จึงไม่หาย)
-function restartGame() { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); normEndgame(S); normKarma(S); normOuting(S); normStory(S); normLife(S); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
+function restartGame() { const mute = S.mute; S = newGame(); S.mute = mute; normTemple(); normEndgame(S); normKarma(S); normOuting(S); normStory(S); normLife(S); normWorld(S); genQueue(); S.queue.unshift(...tutCustomers()); V.cmp = false; mode = 'shop'; spot = null; ownItem = null; lastShown = null; closeModal(); render(); }
 function menuHTML() {
-  return `<h2>เมนู</h2>${dailyBtnHTML()}<button class="btn dailyb goalb" data-l="lifehub">ร้านของฉัน<small>แชทเสนอพระ ไลฟ์ขายของ แต่งร้าน แมว ความปลอดภัย</small></button><button class="btn dailyb goalb" data-eg="goals">เป้าหมาย<small>${lvl() >= 6 ? `${starTxt(stars()) || '★0'} • ตำนาน ${legendsOwned()}/5` : 'ดวล ประมูล ตำนาน สาขา พิพิธภัณฑ์ สมาคม'}${aucToday() ? ' • วันนี้มีงานประมูล!' : ''}</small></button><div class="row"><button class="btn" id="donateBtn">ทำบุญ ถวายวัด<small>บุญ ${S.merit} • กรรม ${S.karma}</small></button><button class="btn" id="endBookBtn">สมุดฉากจบ</button><button class="btn" data-s="orders">กระดานออเดอร์<small>${ordersCount()} งาน</small></button><button class="btn" data-s="ach">ความสำเร็จ<small>${Object.keys(S.ach).length}/40</small></button><button class="btn" data-o="hub">นอกร้าน<small>${esc(outingBadge() || 'สนามพระ ทริป ขุดกรุ')}</small></button>${S.rumor.on ? '<button class="btn no" id="rumorBtn">แก้ข่าวลือ</button>' : ''}</div>${titles().length ? `<p class="note">ฉายาที่ปลดล็อก: ${esc(titles().join(', '))}</p>` : ''}<h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
+  return `<h2>เมนู</h2>${dailyBtnHTML()}<button class="btn dailyb goalb" data-w="hub">วงการพระ<small>ปฏิทิน ฟีด กระดานราคา ส่องเร็ว 60 วิ การ์ดอวด แลกพระ</small></button><button class="btn dailyb goalb" data-l="lifehub">ร้านของฉัน<small>แชทเสนอพระ ไลฟ์ขายของ แต่งร้าน แมว ความปลอดภัย</small></button><button class="btn dailyb goalb" data-eg="goals">เป้าหมาย<small>${lvl() >= 6 ? `${starTxt(stars()) || '★0'} • ตำนาน ${legendsOwned()}/5` : 'ดวล ประมูล ตำนาน สาขา พิพิธภัณฑ์ สมาคม'}${aucToday() ? ' • วันนี้มีงานประมูล!' : ''}</small></button><div class="row"><button class="btn" id="donateBtn">ทำบุญ ถวายวัด<small>บุญ ${S.merit} • กรรม ${S.karma}</small></button><button class="btn" id="endBookBtn">สมุดฉากจบ</button><button class="btn" data-s="orders">กระดานออเดอร์<small>${ordersCount()} งาน</small></button><button class="btn" data-s="ach">ความสำเร็จ<small>${Object.keys(S.ach).length}/40</small></button><button class="btn" data-o="hub">นอกร้าน<small>${esc(outingBadge() || 'สนามพระ ทริป ขุดกรุ')}</small></button>${S.rumor.on ? '<button class="btn no" id="rumorBtn">แก้ข่าวลือ</button>' : ''}</div>${titles().length ? `<p class="note">ฉายาที่ปลดล็อก: ${esc(titles().join(', '))}</p>` : ''}<h3>สถิติ</h3><p>รับเช่า ${S.stats.bought} องค์ • ปล่อยเช่า ${S.stats.sold} องค์ • โดนของเก๊ ${S.stats.fooled} ครั้ง • ชี้จุดเก๊ถูก ${S.stats.spotted} ครั้ง • XP ${S.xp}</p>
   ${S.loan.amt ? `<h3>หนี้เฮียโรงรับจำนำ</h3><p>คงเหลือ <b class="debtc">${fmt(S.loan.amt)}</b> • ดอกเบี้ย 3% ต่อวัน • ${loanLeftDays() > 0 ? `อีก ${loanLeftDays()} วันจะโดนยึดพระ` : 'ครบกำหนดแล้ว ปิดร้านวันนี้จะโดนยึดพระ'}</p>
   <div class="row"><button class="btn ok" id="repayBtn" ${S.money <= 0 ? 'disabled' : ''}>คืนเงิน ${fmt(Math.max(0, Math.min(S.money, S.loan.amt)))}${S.money < S.loan.amt ? '<small>(คืนได้เท่าที่มี)</small>' : ''}</button></div>` : ''}
   <div class="row"><button class="btn" id="toolShopBtn">ร้านอุปกรณ์เซียน</button><button class="btn" id="soundBtn" aria-pressed="${!S.mute}">เสียงประกอบ: ${S.mute ? 'ปิด' : 'เปิด'}</button><button class="btn" id="howBtn">วิธีเล่น</button><button class="btn" id="tutBtn">ดูบทเรียนอีกครั้ง</button><button class="btn no" id="resetBtn">เริ่มเกมใหม่</button></div>`;
@@ -1309,6 +1333,7 @@ $('#act').addEventListener('click', e => {
   if (a.startsWith('eg:')) { modeAct(a.slice(3)); return; }
   if (a.startsWith('k:')) { kAct(a.slice(2)); return; }
   if (a.startsWith('o:')) { oAct(a.slice(2)); return; }
+  if (a.startsWith('w:')) { tAct(a.slice(2)); return; }
   ({ book: () => openModal(bookHTML()), flip, loupe: toggleLoupe, uv: toggleUV, cmp: toggleCmp, framesvc: () => openModal(frameSvcHTML()), dyes: () => dailyAnswer(true), dno: () => dailyAnswer(false), dnext: dailyNext, dexit: toShop, nego: negotiate, buy, pass, inv: () => openModal(invHTML()), end: endDay,
      back: toShop, cert: () => certify(ownItem), sell: () => sell(ownItem), scrap: () => scrap(ownItem) })[a]?.();
 });
@@ -1344,7 +1369,7 @@ $('#mbody').addEventListener('click', e => {
   if (e.target.id === 'bookBack') { openModal(bookHTML()); return; }
   if (e.target.id === 'howBtn') openModal(HOW);
   if (e.target.id === 'tutBtn') { restartTut(); return; }
-  if (e.target.id === 'soundBtn') { S.mute = !S.mute; save(); openModal(menuHTML()); sfx('buy'); }
+  if (e.target.id === 'soundBtn') { S.mute = !S.mute; save(); musicOn(); openModal(menuHTML()); sfx('buy'); }
   if (e.target.id === 'resetBtn') openModal(`<h2>เริ่มเกมใหม่?</h2><p>เงิน เลเวล และพระในตู้ทั้งหมดจะหายไป</p><div class="row"><button class="btn dim" data-close>ยกเลิก</button><button class="btn no" id="resetYes">ยืนยัน เริ่มใหม่</button></div>`);
   if (e.target.id === 'resetYes') restartGame();
 });
@@ -1374,9 +1399,11 @@ $('#clp').addEventListener('click', e => {
   const b = e.target.closest('[data-cl]'); if (!b) return; const [k, v] = b.dataset.cl.split(':');
   if (CL.marks[k] === v) { const { [k]: _, ...rest } = CL.marks; CL.marks = rest; } else CL.marks[k] = v; renderChips(); checkTut();
 });
+document.addEventListener('input', e => { const v = e.target.closest('[data-wv]'); if (v) setVol(v.dataset.wv, v.value); });
 document.addEventListener('click', e => { const eg = e.target.closest('[data-eg]'); if (eg && !eg.disabled) { egClick(eg); return; } });
 document.addEventListener('click', e => {
   const kb = e.target.closest('[data-k]'); if (kb && !kb.disabled) { kClick(kb); return; }
+  const wb = e.target.closest('[data-w]'); if (wb && !wb.disabled) { wClick(wb); return; }
   const lb = e.target.closest('[data-l]'); if (lb && !lb.disabled) { lClick(lb); return; }
   const sb = e.target.closest('[data-s]'); if (sb && !sb.disabled) { sClick(sb); return; }
   const ob = e.target.closest('[data-o]'); if (ob && !ob.disabled && !ob.matches('path:not([data-o])')) { oClick(ob); return; }
